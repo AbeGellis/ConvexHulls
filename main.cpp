@@ -21,6 +21,15 @@ struct Point {
     Point(float x = 0, float y = 0, float z = 0) {this->x = x; this->y = y; this->z = z;}
 };
 
+struct Line {
+    Point a, b;
+
+    Line(float x1, float y1, float z1, float x2, float y2, float z2) {
+        a = Point(x1,y1,z1);
+        b = Point(x2,y2,z2);
+    }
+};
+
 struct Tri {
     Point a, b, c;
 
@@ -33,11 +42,14 @@ struct Tri {
 };
 
 static vector<Tri>* faces;
+static vector<Line>* lines;
+static vector<Point>* points;
 static double scale = 1;
 const double MAX_SIZE = 2;
-static bool facesOn = false;
+static bool facesOn = true;
 static double xRot = 0, yRot = 0;
 static double rotSpeed = 10;
+const double POINT_SIZE = 2;
 /* GLUT callback Handlers */
 
 static void resize(int width, int height)
@@ -54,6 +66,8 @@ static void resize(int width, int height)
 }
 
 static void renderFaces(const vector<Tri>& tris) {
+    glEnable(GL_LIGHTING);
+    glBegin(GL_TRIANGLES);
     for (size_t i = 0; i < tris.size(); ++i) {
         glNormal3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
         glVertex3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
@@ -64,9 +78,29 @@ static void renderFaces(const vector<Tri>& tris) {
         glNormal3f(tris[i].c.x,tris[i].c.y,tris[i].c.z);
         glVertex3f(tris[i].c.x,tris[i].c.y,tris[i].c.z);
     }
+    glEnd();
 }
 
-static void calculateScale(const vector<Tri>& tris) {
+static void renderLines(const vector<Line>& lines) {
+    glDisable(GL_LIGHTING);
+    glBegin(GL_LINES);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        glVertex3f(lines[i].a.x,lines[i].a.y,lines[i].a.z);
+        glVertex3f(lines[i].b.x,lines[i].b.y,lines[i].b.z);
+    }
+    glEnd();
+}
+
+static void renderPoints(const vector<Point>& points) {
+    glDisable(GL_LIGHTING);
+    glBegin(GL_POINTS);
+    for (size_t i = 0; i < points.size(); ++i) {
+        glVertex3f(points[i].x,points[i].y,points[i].z);
+    }
+    glEnd();
+}
+
+static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
     double furthest = 0;
 
     for (size_t i = 0; i < tris.size(); ++i) {
@@ -81,6 +115,21 @@ static void calculateScale(const vector<Tri>& tris) {
         if (tris[i].c.z > furthest) furthest = tris[i].c.z;
     }
 
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].a.x > furthest) furthest = lines[i].a.x;
+        if (lines[i].a.y > furthest) furthest = lines[i].a.y;
+        if (lines[i].a.z > furthest) furthest = lines[i].a.z;
+        if (lines[i].b.x > furthest) furthest = lines[i].b.x;
+        if (lines[i].b.y > furthest) furthest = lines[i].b.y;
+        if (lines[i].b.z > furthest) furthest = lines[i].b.z;
+    }
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        if (points[i].x > furthest) furthest = points[i].x;
+        if (points[i].y > furthest) furthest = points[i].y;
+        if (points[i].z > furthest) furthest = points[i].z;
+    }
+
     if (furthest > MAX_SIZE)
         scale = MAX_SIZE / furthest;
     else
@@ -90,7 +139,6 @@ static void calculateScale(const vector<Tri>& tris) {
 static void display(void)
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glColor3d(1,0,0);
 
      glPushMatrix();
         glTranslated(0,0,-6);
@@ -98,10 +146,16 @@ static void display(void)
         glRotated(yRot,1,0,0);
         glScaled(scale, scale, scale);
 
-        if (facesOn) glBegin(GL_TRIANGLES);
-        else glBegin(GL_POINTS);
+        glColor4d(1,0,0,1);
+        renderLines(*lines);
+
+        renderPoints(*points);
+
+        glColor4d(1,0,0,.5);
+        if (facesOn)
             renderFaces(*faces);
-        glEnd();
+
+
     glPopMatrix();
 
     glutSwapBuffers();
@@ -147,9 +201,9 @@ const GLfloat light_diffuse[]  = { 1.0f, 1.0f, 1.0f, 1.0f };
 const GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
 const GLfloat light_position[] = { 2.0f, 5.0f, 5.0f, 0.0f };
 
-const GLfloat mat_ambient[]    = { 0.7f, 0.7f, 0.7f, 1.0f };
-const GLfloat mat_diffuse[]    = { 0.8f, 0.8f, 0.8f, 1.0f };
-const GLfloat mat_specular[]   = { 1.0f, 1.0f, 1.0f, 1.0f };
+const GLfloat mat_ambient[]    = { 0.7f, 0.7f, 0.7f, 0.5f };
+const GLfloat mat_diffuse[]    = { 0.8f, 0.8f, 0.8f, 0.5f };
+const GLfloat mat_specular[]   = { 1.0f, 1.0f, 1.0f, 0.5f };
 const GLfloat high_shininess[] = { 25.0f };
 
 /* Program entry point */
@@ -159,9 +213,19 @@ int main(int argc, char *argv[])
     vector<Tri> t;// { {0,0,0, 10,0,0, 0,1,10}, {0,0,0, 0,-10,0, 0,1,10}};
     t.push_back(Tri(0,0,0, 10,0,0, 0,1,10));
     t.push_back(Tri(0,0,0, 0,-10,0, 0,1,10));
-    faces = &t;
 
-    calculateScale(*faces);
+    vector<Line> l;
+    l.push_back(Line(5,5,5,-5,-5,5));
+
+    vector<Point> p;
+    p.push_back(Point(3,3,3));
+
+
+    faces = &t;
+    lines = &l;
+    points = &p;
+
+    calculateScale(*faces, *lines, *points);
 
     glutInit(&argc, argv);
     glutInitWindowSize(640,640);
@@ -169,6 +233,9 @@ int main(int argc, char *argv[])
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 
     glutCreateWindow("3D Convex Hulls");
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable( GL_BLEND );
 
     glutReshapeFunc(resize);
     glutDisplayFunc(display);
@@ -188,10 +255,12 @@ int main(int argc, char *argv[])
     glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);
     glLightfv(GL_LIGHT0, GL_POSITION, light_position);
 
-    glMaterialfv(GL_FRONT, GL_AMBIENT,   mat_ambient);
+    /*glMaterialfv(GL_FRONT, GL_AMBIENT,   mat_ambient);
     glMaterialfv(GL_FRONT, GL_DIFFUSE,   mat_diffuse);
     glMaterialfv(GL_FRONT, GL_SPECULAR,  mat_specular);
-    glMaterialfv(GL_FRONT, GL_SHININESS, high_shininess);
+    glMaterialfv(GL_FRONT, GL_SHININESS, high_shininess);*/
+
+    glPointSize(POINT_SIZE);
 
     glutMainLoop();
 
