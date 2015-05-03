@@ -52,6 +52,27 @@ static double rotSpeed = 10;
 const double POINT_SIZE = 2;
 /* GLUT callback Handlers */
 
+// Determines if three points are collinear
+// Equation (9) of http://mathworld.wolfram.com/Collinear.html
+static bool collinear(const Point& a, const Point& b, const Point& c) {
+    return 0 == ((a.x * b.y * c.z) + (b.x * c.y * a.z) + (c.x * a.y * b.z)
+                    - (a.x * c.y * b.z) - (b.x * a.y * c.z) - (c.x * b.y * a.z));
+}
+
+// Determines if four points are coplanar
+// From http://mathworld.wolfram.com/Coplanar.html
+static bool coplanar(const Point& a, const Point& b, const Point& c, const Point& d) {
+    Point t1(c.x - a.x, c.y - a.y, c.z - a.z); // c - a
+    Point t2(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
+    Point t3(d.x - c.x, d.y - c.y, d.z - c.z); // d - c
+
+    // t2 x t3
+    Point t4(t2.y * t3.z - t2.z * t3.y, t2.z * t3.x - t2.x * t3.z, t2.x * t3.y - t2.y * t3.x);
+
+    // coplanar if 0 == (t1 . (t2 x t3))
+    return (0 == (t1.x * t4.x + t1.y * t4.y + t1.z * t4.z));
+}
+
 static void resize(int width, int height)
 {
     const float ar = (float) width / (float) height;
