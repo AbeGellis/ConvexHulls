@@ -9,6 +9,13 @@
 #include <GLUT/glut.h>
 #else
 #include <GL/glut.h>
+#endif // __APPLE__
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <chrono>
+#include <thread>
 #endif
 
 #include <stdlib.h>
@@ -16,8 +23,6 @@
 #include <queue>
 #include <iostream>
 #include <fstream>
-#include <chrono>
-#include <thread>
 
 #include <math.h>
 #include <unistd.h>
@@ -70,6 +75,68 @@ static double rotSpeed = 10;
 const double POINT_SIZE = 2;
 /* GLUT callback Handlers */
 
+#include <windows.h>
+
+static void renderFaces(const vector<Tri>& tris) {
+    glEnable(GL_LIGHTING);
+    glBegin(GL_TRIANGLES);
+    for (size_t i = 0; i < tris.size(); ++i) {
+        glColor4f(tris[i].col.r, tris[i].col.g, tris[i].col.b, tris[i].col.a);
+        glNormal3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
+        glVertex3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
+
+        glNormal3f(tris[i].b.x,tris[i].b.y,tris[i].b.z);
+        glVertex3f(tris[i].b.x,tris[i].b.y,tris[i].b.z);
+
+        glNormal3f(tris[i].c.x,tris[i].c.y,tris[i].c.z);
+        glVertex3f(tris[i].c.x,tris[i].c.y,tris[i].c.z);
+    }
+    glEnd();
+}
+
+static void renderLines(const vector<Line>& lines) {
+    glDisable(GL_LIGHTING);
+    glBegin(GL_LINES);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        glColor4f(lines[i].col.r, lines[i].col.g, lines[i].col.b, lines[i].col.a);
+        glVertex3f(lines[i].a.x,lines[i].a.y,lines[i].a.z);
+        glVertex3f(lines[i].b.x,lines[i].b.y,lines[i].b.z);
+    }
+    glEnd();
+}
+
+static void renderPoints(const vector<Point>& points) {
+    glDisable(GL_LIGHTING);
+    glBegin(GL_POINTS);
+    for (size_t i = 0; i < points.size(); ++i) {
+        glColor4f(points[i].col.r, points[i].col.g, points[i].col.b, points[i].col.a);
+        glVertex3f(points[i].x,points[i].y,points[i].z);
+    }
+    glEnd();
+}
+
+static void display(void)
+{
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+     glPushMatrix();
+        glTranslated(0,0,-6);
+        glRotated(xRot,0,1,0);
+        glRotated(yRot,1,0,0);
+        glScaled(scale, scale, scale);
+
+        renderLines(*lines);
+
+        renderPoints(*points);
+
+
+            renderFaces(*faces);
+
+
+    glPopMatrix();
+
+    glutSwapBuffers();
+}
 
 static float dotProd(const Point& t1, const Point& t2) {
     return t1.x * t2.x + t1.y * t2.y + t1.z * t2.z;
@@ -148,10 +215,18 @@ static float distPointToTri( const Point& p, const Tri& t ) {
     return dotProd(nhat, t3);
 }
 
+
+static void sleep(int millis) {
+#ifdef _WIN32
+    Sleep(millis);
+#else
+    this_thread::sleep_for(chrono::milliseconds(200));
+#endif
+}
+
 // 3D Quickhull Algorithm
 static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the points. Intentional.
     t.clear();
-    this_thread::sleep_for(chrono::milliseconds(200));
     glutPostRedisplay();
     cout << "Assignment OK\n";
     // create simplex of 4 points
@@ -165,8 +240,8 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             f.b = temp;
         }
         t.push_back(f);
-        this_thread::sleep_for(chrono::milliseconds(200));
-        glutPostRedisplay();
+        sleep(200);
+        display();
     }
     for ( int i = 0; i < 4; ++i ) { // Add adjacent pointers
         for ( int j = 0; j < 4; ++j ) {
@@ -233,43 +308,7 @@ static void resize(int width, int height)
     glLoadIdentity() ;
 }
 
-static void renderFaces(const vector<Tri>& tris) {
-    glEnable(GL_LIGHTING);
-    glBegin(GL_TRIANGLES);
-    for (size_t i = 0; i < tris.size(); ++i) {
-        glColor4f(tris[i].col.r, tris[i].col.g, tris[i].col.b, tris[i].col.a);
-        glNormal3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
-        glVertex3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
 
-        glNormal3f(tris[i].b.x,tris[i].b.y,tris[i].b.z);
-        glVertex3f(tris[i].b.x,tris[i].b.y,tris[i].b.z);
-
-        glNormal3f(tris[i].c.x,tris[i].c.y,tris[i].c.z);
-        glVertex3f(tris[i].c.x,tris[i].c.y,tris[i].c.z);
-    }
-    glEnd();
-}
-
-static void renderLines(const vector<Line>& lines) {
-    glDisable(GL_LIGHTING);
-    glBegin(GL_LINES);
-    for (size_t i = 0; i < lines.size(); ++i) {
-        glColor4f(lines[i].col.r, lines[i].col.g, lines[i].col.b, lines[i].col.a);
-        glVertex3f(lines[i].a.x,lines[i].a.y,lines[i].a.z);
-        glVertex3f(lines[i].b.x,lines[i].b.y,lines[i].b.z);
-    }
-    glEnd();
-}
-
-static void renderPoints(const vector<Point>& points) {
-    glDisable(GL_LIGHTING);
-    glBegin(GL_POINTS);
-    for (size_t i = 0; i < points.size(); ++i) {
-        glColor4f(points[i].col.r, points[i].col.g, points[i].col.b, points[i].col.a);
-        glVertex3f(points[i].x,points[i].y,points[i].z);
-    }
-    glEnd();
-}
 
 static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
     double furthest = 0;
@@ -307,28 +346,6 @@ static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, c
         scale = 1;
 }
 
-static void display(void)
-{
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-     glPushMatrix();
-        glTranslated(0,0,-6);
-        glRotated(xRot,0,1,0);
-        glRotated(yRot,1,0,0);
-        glScaled(scale, scale, scale);
-
-        renderLines(*lines);
-
-        renderPoints(*points);
-
-        
-            renderFaces(*faces);
-
-
-    glPopMatrix();
-
-    glutSwapBuffers();
-}
 
 
 static void key(unsigned char key, int x, int y)
@@ -378,7 +395,7 @@ const GLfloat high_shininess[] = { 25.0f };
 int main(int argc, char *argv[])
 {
     char* file_name;
-    bool using_file;
+    bool using_file = false;
     for ( int i = 0; i < argc; ++i ) {
         if ( strcmp(argv[i], "--pointset") == 0 ) {
             file_name = argv[i+1];

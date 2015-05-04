@@ -5,3 +5,18 @@
 	<stdlib.h>
 	<vector>
 
+1430769628 source:c:\users\admin\documents\convexhulls\main.cpp
+	<GLUT/glut.h>
+	<GL/glut.h>
+	<windows.h>
+	<chrono>
+	<thread>
+	<stdlib.h>
+	<vector>
+	<queue>
+	<iostream>
+	<fstream>
+	<math.h>
+	<unistd.h>
+	<windows.h>
+
