@@ -45,6 +45,9 @@ struct Point {
 bool operator==(const Point& lhs, const Point& rhs) {
     return (lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z);
 }
+bool operator!=(const Point& lhs, const Point& rhs) {
+    return !(lhs == rhs);
+}
 
 struct Line {
     Point a, b;
@@ -58,10 +61,15 @@ struct Tri {
     Color col;
     vector<Point*> outside_set; // For use with Quickhull
     vector<Tri*> adjacent; // For use with Quickhull
-    Tri(Point a, Point b, Point c, Color col = Color(1,0,0,.5)) : a(a), b(b), c(c), col(col) {}
+    bool vis; // For use with Quickhull
+    bool del; // For use with Quickhull
+    Tri(Point a, Point b, Point c, Color col = Color(1,1,1,.5)) : a(a), b(b), c(c), col(col), vis(false), del(false) {}
 };
 bool operator==(const Tri& lhs, const Tri& rhs) {
     return (lhs.a == rhs.a && lhs.b == rhs.b && lhs.c == rhs.c);
+}
+bool operator!=(const Tri& lhs, const Tri& rhs) {
+    return !(lhs == rhs);
 }
 
 static vector<Tri>* faces;
@@ -75,12 +83,12 @@ static double rotSpeed = 10;
 const double POINT_SIZE = 2;
 /* GLUT callback Handlers */
 
-#include <windows.h>
-
 static void renderFaces(const vector<Tri>& tris) {
     glEnable(GL_LIGHTING);
     glBegin(GL_TRIANGLES);
     for (size_t i = 0; i < tris.size(); ++i) {
+        if ( tris[i].del )
+            continue;
         glColor4f(tris[i].col.r, tris[i].col.g, tris[i].col.b, tris[i].col.a);
         glNormal3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
         glVertex3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
@@ -227,13 +235,14 @@ static void sleep(int millis) {
 // 3D Quickhull Algorithm
 static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the points. Intentional.
     t.clear();
-    glutPostRedisplay();
+    sleep(200);
+    display();
     cout << "Assignment OK\n";
     // create simplex of 4 points
     int perm[4][4] = { { 0, 1, 2, 3 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 }, { 1, 2, 3, 0 } };
     for ( int i = 0; i < 4; ++i ) {
         Tri f(p[perm[i][0]], p[perm[i][1]], p[perm[i][2]]);
-        if ( vSign(f, p[perm[i][3]]) < 0 ) { // Make the orientations correct: any other point
+        if ( !p[perm[i][3]].assigned && vSign(f, p[perm[i][3]]) < 0 ) { // Make the orientations correct: any other point
                                             // on the hull should be "inside"
             Point temp = f.c;
             f.c = f.b;
@@ -245,9 +254,7 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
     }
     for ( int i = 0; i < 4; ++i ) { // Add adjacent pointers
         for ( int j = 0; j < 4; ++j ) {
-            if ( i != j ) {
-                t[i].adjacent.push_back(&(t[j]));
-            }
+            t[i].adjacent.push_back(&(t[j]));
         }
     }
 
@@ -258,10 +265,9 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
     //      if F has outside points, we will process it later...
     for ( int i = 0; i < 4; ++i ) {
         for ( int j = 0; j < p.size(); ++j ) {
-            if ( !p[j].assigned && vSign(t[i], p[j]) < 0 ) {
+            if ( vSign(t[i], p[j]) < 0 ) {
                 t[i].outside_set.push_back(&(p[j]));
                 p[j].assigned = true;
-                cout << i << ' ' << t[i].outside_set.size() << '\n';
             }
         }
         if ( t[i].outside_set.size() > 0 ) {
@@ -271,17 +277,26 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
 
     cout << "Outside set OK\n";
 
+    int round = 0;
+
     // for each facet F with a non-empty outside set
     while ( t_to_process.size() > 0 ) {
-        Tri* f = t_to_process.front();
+        cout << "round: " << round << '\n';
+        round++;
+        Tri *f = t_to_process.front();
         t_to_process.pop();
+
+        if ( f->del )
+            continue;
 
         cout << "Pop OK\n";
 
         // select the furthest point p of F's outside set
         int argmax = -1;
         int max = 0;
+        cout << "Outside size: " << f->outside_set.size() << '\n';
         for ( int j = 0; j < f->outside_set.size(); ++j ) {
+            cout << f->outside_set[j]->index << '\n';
             int dist = distPointToTri( *(f->outside_set[j]), *f );
             if ( dist > max ) {
                 max = dist;
@@ -289,9 +304,149 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             }
         }
 
-        points->at(f->outside_set[argmax]->index).col.g = 1;
-        // initialize the visible set V to F
+        int argmax_real_index = f->outside_set[argmax]->index;
 
+        cout << "point: " << argmax_real_index << '\n';
+
+        points->at(argmax_real_index).col.g = 1;
+        sleep(200);
+        display();
+        
+        
+        // initialize the visible set V to F
+        // for all neighbors N of facets to F
+        for ( int j = 0; j < f->adjacent.size(); ++j ) {
+            if ( f->adjacent[j]->del ) // Ignore deleted facets
+                continue;
+            // if p is above N, add N to V
+            if ( vSign( *(f->adjacent[j]), *(f->outside_set[argmax]) ) < 0 ) {
+                f->adjacent[j]->vis = true;
+                f->adjacent[j]->col.r = 0;
+            }
+        }
+        sleep(200);
+        display();
+        
+        // the boundary of V is the set of horizon ridges H
+        // for each ridge R in H
+        for ( int i = 0; i < p.size(); ++i ) { // This probably could have been implemented
+                                                // more efficiently using proper data structure
+            for ( int j = 0; j < p.size(); ++j ) {
+                
+                int vis_count = 0;
+                for ( int k = 0; k < t.size(); ++k ) {
+                    if ( t[k].del ) // Ignore deleted facets
+                        continue;
+                    if ( t[k].vis && ((t[k].a == p[i] && t[k].b == p[j])
+                        || (t[k].a == p[i] && t[k].c == p[j])
+                        || (t[k].b == p[i] && t[k].c == p[j])
+                        || (t[k].a == p[j] && t[k].b == p[i])
+                        || (t[k].a == p[j] && t[k].c == p[i])
+                        || (t[k].b == p[j] && t[k].c == p[i])
+                        )) {
+                        vis_count++;
+                        
+                        if ( vis_count >= 2 )
+                            break;
+                    }
+                }
+                
+                if ( vis_count == 1) {
+                    // create a new facet F' from R and p
+                    Tri newF(p[i],p[j],p[argmax_real_index]);
+                    for ( int k = 0; k < t.size(); ++k ) {// Make the orientations correct: any other point
+                                                            // on the hull should be "inside"
+                        if ( t[k].a != p[i] && t[k].a != p[j] ) {
+                            if ( vSign(newF, t[k].a) < 0 ) {
+                                Point temp = newF.a;
+                                newF.a = newF.b;
+                                newF.b = temp;
+                                break;
+                            }
+                        }
+                        if ( t[k].b != p[i] && t[k].b != p[j] ) {
+                            if ( vSign(newF, t[k].b) < 0 ) {
+                                Point temp = newF.a;
+                                newF.a = newF.b;
+                                newF.b = temp;
+                                break;
+                            }
+                        }
+                        if ( t[k].c != p[i] && t[k].c != p[j] ) {
+                            if ( vSign(newF, t[k].c) < 0 ) {
+                                Point temp = newF.a;
+                                newF.a = newF.b;
+                                newF.b = temp;
+                                break;
+                            }
+                        }
+                    }
+                    t.push_back(newF);
+                    // Link the new facet to its neighbors
+                    for ( int k = 0; k < t.size(); ++k ) {
+                        if ( t[k].del ) // Ignore deleted facets
+                            continue;
+                         if ( (t[k].a == newF.a && t[k].b == newF.b)
+                            || (t[k].a == newF.a && t[k].c == newF.b)
+                            || (t[k].b == newF.a && t[k].c == newF.b)
+                            || (t[k].a == newF.b && t[k].b == newF.a)
+                            || (t[k].a == newF.b && t[k].c == newF.a)
+                            || (t[k].b == newF.b && t[k].c == newF.a)
+                            || (t[k].a == newF.a && t[k].b == newF.c)
+                            || (t[k].a == newF.a && t[k].c == newF.c)
+                            || (t[k].b == newF.a && t[k].c == newF.c)
+                            || (t[k].a == newF.c && t[k].b == newF.a)
+                            || (t[k].a == newF.c && t[k].c == newF.a)
+                            || (t[k].b == newF.c && t[k].c == newF.a)
+                            || (t[k].a == newF.b && t[k].b == newF.c)
+                            || (t[k].a == newF.b && t[k].c == newF.c)
+                            || (t[k].b == newF.b && t[k].c == newF.c)
+                            || (t[k].a == newF.c && t[k].b == newF.b)
+                            || (t[k].a == newF.c && t[k].c == newF.b)
+                            || (t[k].b == newF.c && t[k].c == newF.b)
+                            ) {
+                            t.back().adjacent.push_back(&(t[k]));
+                        }
+                    }
+                    t.back().adjacent.push_back(&(t.back()));
+                    
+                    // For each point q in an outside set of a facet of V
+                    for ( int j = 0; j < p.size(); ++j ) {
+                        // if q is above F' assing q to F''s outside set
+                        if ( !p[j].assigned && vSign(t.back(), p[j]) < 0 ) {
+                            t.back().outside_set.push_back(&(p[j]));
+                            p[j].assigned = true;
+                        }
+                    }
+
+                    cout << "Outside size: " << t.back().outside_set.size() << '\n';
+                    
+                    if ( t.back().outside_set.size() > 0 ) {
+                        t_to_process.push(&(t.back()));
+                        cout << "Push!\n";
+                    }
+                    
+                    sleep(200);
+                    display();
+                    
+                    
+                    
+                }
+            }
+        }
+        cout << "Ready to delete\n";
+        
+        // Delete the facets in V
+        for ( int j = 0; j < f->adjacent.size(); ++j ) {
+            if ( f->adjacent[j]->vis ) {// Ignore deleted facets
+                
+                f->adjacent[j]->del = true;
+            }
+        }
+
+        points->at(argmax_real_index).col.g = 0;
+        sleep(200);
+        display();
     }
 }
 
@@ -307,7 +462,6 @@ static void resize(int width, int height)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity() ;
 }
-
 
 
 static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
@@ -346,8 +500,6 @@ static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, c
         scale = 1;
 }
 
-
-
 static void key(unsigned char key, int x, int y)
 {
     switch (key)
@@ -357,6 +509,12 @@ static void key(unsigned char key, int x, int y)
             break;
         case 'q':
             quickhull(*points, *faces);
+            break;
+        case 'c':
+            faces->clear();
+            for ( int i = 0; i < points->size(); ++i ) {
+                points->at(i).col = Color(1,0,0,1);
+            }
             break;
         case 'a':
             xRot -= rotSpeed;
@@ -406,6 +564,7 @@ int main(int argc, char *argv[])
 
     vector<Point> p;
 
+    long long N;
     if ( using_file ) {
         ifstream ifs;
         ifs.open(file_name);
@@ -413,8 +572,8 @@ int main(int argc, char *argv[])
             cerr << "Error: Could not open file " << file_name << "\n";
             return EXIT_FAILURE;
         }
-        int index = 0;
-        int x, y, z;
+        long long index = 0;
+        float x, y, z;
         while ( ifs >> x ) {
             ifs >> y;
             ifs >> z;
@@ -426,8 +585,8 @@ int main(int argc, char *argv[])
             cerr << "Error: Cannot find the 3D convex hull of fewer than four points.\n";
             return EXIT_FAILURE;
         }
+        N = index;
     } else {
-        int N;
         cout << "How many points will you be entering? ";
         cin >> N;
         if ( N < 4 ) {
@@ -436,7 +595,7 @@ int main(int argc, char *argv[])
         }
         cout << "Please enter your points in the following format:\nx y z\n\n";
 
-        int x, y, z;
+        float x, y, z;
         for ( int i = 0; i < N; ++i ) {
             cout << "Point #" << i+1 << ": ";
             cin >> x >> y >> z;
@@ -452,6 +611,7 @@ int main(int argc, char *argv[])
 
 
     vector<Tri> t;// { {0,0,0, 10,0,0, 0,1,10}, {0,0,0, 0,-10,0, 0,1,10}};
+    t.reserve(N * N * N);
 //    t.push_back(Tri(0,0,0, 10,0,0, 0,1,10));
 //    t.push_back(Tri(0,0,0, 0,-10,0, 0,1,10));
 
@@ -478,7 +638,7 @@ int main(int argc, char *argv[])
     glutReshapeFunc(resize);
     glutDisplayFunc(display);
     glutKeyboardFunc(key);
-    glutIdleFunc(idle);
+    // glutIdleFunc(idle);
 
     glClearColor(0,0,0,1);
 
