@@ -13,6 +13,8 @@
 
 #include <stdlib.h>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 using namespace std;
 
@@ -53,10 +55,15 @@ const double POINT_SIZE = 2;
 /* GLUT callback Handlers */
 
 // Determines if three points are collinear
-// Equation (9) of http://mathworld.wolfram.com/Collinear.html
+// Equation (5) of http://mathworld.wolfram.com/Collinear.html
 static bool collinear(const Point& a, const Point& b, const Point& c) {
-    return 0 == ((a.x * b.y * c.z) + (b.x * c.y * a.z) + (c.x * a.y * b.z)
-                    - (a.x * c.y * b.z) - (b.x * a.y * c.z) - (c.x * b.y * a.z));
+    Point t1(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
+    Point t2(a.x - c.x, a.y - c.y, a.z - c.z); // a - c
+
+    // t1 x t2
+    Point t3(t1.y * t2.z - t1.z * t2.y, t1.z * t2.x - t1.x * t2.z, t1.x * t2.y - t1.y * t2.x);
+
+    return (0 == (t3.x * t3.x + t3.y * t3.y + t3.z + t3.z));
 }
 
 // Determines if four points are coplanar
@@ -71,6 +78,27 @@ static bool coplanar(const Point& a, const Point& b, const Point& c, const Point
 
     // coplanar if 0 == (t1 . (t2 x t3))
     return (0 == (t1.x * t4.x + t1.y * t4.y + t1.z * t4.z));
+}
+
+static bool nondegenerate(const vector<Point>& p) {
+    cerr << p.size() << endl;
+    for ( int i = 0; i < p.size(); ++i ) {
+        for ( int j = i + 1; j < p.size(); ++j ) {
+            for ( int k = j + 1; k < p.size(); ++k ) {
+                if ( collinear(p[i], p[j], p[k]) ) {
+                    cerr << "3 Collinear points detected!\n";
+                    return false;
+                }
+                for ( int l = k + 1; l < p.size(); ++l ) {
+                    if ( coplanar(p[i], p[j], p[k], p[l]) ) {
+                        cerr << "4 Coplanar points detected!\n";
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
 }
 
 static void resize(int width, int height)
@@ -231,15 +259,68 @@ const GLfloat high_shininess[] = { 25.0f };
 
 int main(int argc, char *argv[])
 {
-    vector<Tri> t;// { {0,0,0, 10,0,0, 0,1,10}, {0,0,0, 0,-10,0, 0,1,10}};
-    t.push_back(Tri(0,0,0, 10,0,0, 0,1,10));
-    t.push_back(Tri(0,0,0, 0,-10,0, 0,1,10));
-
-    vector<Line> l;
-    l.push_back(Line(5,5,5,-5,-5,5));
+    char* file_name;
+    bool using_file;
+    for ( int i = 0; i < argc; ++i ) {
+        if ( strcmp(argv[i], "--pointset") == 0 ) {
+            file_name = argv[i+1];
+            using_file = true;
+            break;
+        }
+    }
 
     vector<Point> p;
-    p.push_back(Point(3,3,3));
+
+    if ( using_file ) {
+        ifstream ifs;
+        ifs.open(file_name);
+        if (!ifs) {
+            cerr << "Error: Could not open file " << file_name << "\n";
+            return EXIT_FAILURE;
+        }
+
+        int x, y, z;
+        while ( ifs >> x ) {
+            ifs >> y;
+            ifs >> z;
+            p.push_back(Point(x,y,z));
+        }
+
+        if ( p.size() < 4 ) {
+            cerr << "Error: Cannot find the 3D convex hull of fewer than four points.\n";
+            return EXIT_FAILURE;
+        }
+    } else {
+        int N;
+        cout << "How many points will you be entering? ";
+        cin >> N;
+        if ( N < 4 ) {
+            cerr << "Error: Cannot find the 3D convex hull of fewer than four points.\n";
+            return EXIT_FAILURE;
+        }
+        cout << "Please enter your points in the following format:\nx y z\n\n";
+
+        int x, y, z;
+        for ( int i = 1; i <= N; ++i ) {
+            cout << "Point #" << i << ": ";
+            cin >> x >> y >> z;
+            p.push_back(Point(x,y,z));
+        }
+    }
+
+    if ( !nondegenerate(p) ) {
+        cerr << "Point set must be nondegenerate (no 3 points can be collinear, no 4 points coplanar).\n";
+        return EXIT_FAILURE;
+    }
+
+
+
+    vector<Tri> t;// { {0,0,0, 10,0,0, 0,1,10}, {0,0,0, 0,-10,0, 0,1,10}};
+//    t.push_back(Tri(0,0,0, 10,0,0, 0,1,10));
+//    t.push_back(Tri(0,0,0, 0,-10,0, 0,1,10));
+
+    vector<Line> l;
+//    l.push_back(Line(5,5,5,-5,-5,5));
 
 
     faces = &t;
