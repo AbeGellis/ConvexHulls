@@ -13,45 +13,46 @@
 
 #include <stdlib.h>
 #include <vector>
+#include <queue>
 #include <iostream>
 #include <fstream>
+#include <math.h>
 
 using namespace std;
 
 struct Color {
     float r,g,b,a;
-    Color(float r = 0, float g = 0, float b = 0, float a = 0) {this->r = r; this->b = b; this->g = g; this->a = a;}
+    Color(float r = 0, float g = 0, float b = 0, float a = 0) : r(r), g(g), b(b), a(a) {}
 };
 
 
 struct Point {
     float x,y,z;
     Color col;
-    Point(float x = 0, float y = 0, float z = 0, Color c = Color(1,0,0,1)) {this->x = x; this->y = y; this->z = z; col = c;}
+    bool assigned; // For use with Quickhull
+    Point(float x = 0, float y = 0, float z = 0, Color c = Color(1,0,0,1)) : x(x), y(y), z(z), col(c), assigned(false) {}
 };
+bool operator==(const Point& lhs, const Point& rhs) {
+    return (lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z);
+}
 
 struct Line {
     Point a, b;
     Color col;
 
-    Line(float x1, float y1, float z1, float x2, float y2, float z2, Color c = Color(1,0,0,.5)) {
-        a = Point(x1,y1,z1);
-        b = Point(x2,y2,z2);
-        col = c;
-    }
+    Line(Point a, Point b, Color c = Color(1,0,0,.5)) : a(a), b(b), col(c) {}
 };
 
 struct Tri {
     Point a, b, c;
     Color col;
-    Tri(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3, Color col = Color(1,0,0,.5)) {
-        a = Point(x1,y1,z1);
-        b = Point(x2,y2,z2);
-        c = Point(x3,y3,z3);
-        this->col = col;
-    }
-
+    vector<Point*> outside_set; // For use with Quickhull
+    vector<Tri*> adjacent; // For use with Quickhull
+    Tri(Point a, Point b, Point c, Color col = Color(1,0,0,.5)) : a(a), b(b), c(c), col(col) {}
 };
+bool operator==(const Tri& lhs, const Tri& rhs) {
+    return (lhs.a == rhs.a && lhs.b == rhs.b && lhs.c == rhs.c);
+}
 
 static vector<Tri>* faces;
 static vector<Line>* lines;
@@ -64,6 +65,15 @@ static double rotSpeed = 10;
 const double POINT_SIZE = 2;
 /* GLUT callback Handlers */
 
+
+static float dotProd(const Point& t1, const Point& t2) {
+    return t1.x * t2.x + t1.y * t2.y + t1.z * t2.z;
+}
+
+static Point crossProd(const Point& t1, const Point& t2) {
+    return Point(t1.y * t2.z - t1.z * t2.y, t1.z * t2.x - t1.x * t2.z, t1.x * t2.y - t1.y * t2.x);
+}
+
 // Determines if three points are collinear
 // Equation (5) of http://mathworld.wolfram.com/Collinear.html
 static bool collinear(const Point& a, const Point& b, const Point& c) {
@@ -71,9 +81,9 @@ static bool collinear(const Point& a, const Point& b, const Point& c) {
     Point t2(a.x - c.x, a.y - c.y, a.z - c.z); // a - c
 
     // t1 x t2
-    Point t3(t1.y * t2.z - t1.z * t2.y, t1.z * t2.x - t1.x * t2.z, t1.x * t2.y - t1.y * t2.x);
+    Point t3 = crossProd(t1, t2);
 
-    return (0 == (t3.x * t3.x + t3.y * t3.y + t3.z + t3.z));
+    return (0 == dotProd(t3, t3));
 }
 
 // Determines if four points are coplanar
@@ -83,15 +93,11 @@ static bool coplanar(const Point& a, const Point& b, const Point& c, const Point
     Point t2(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
     Point t3(d.x - c.x, d.y - c.y, d.z - c.z); // d - c
 
-    // t2 x t3
-    Point t4(t2.y * t3.z - t2.z * t3.y, t2.z * t3.x - t2.x * t3.z, t2.x * t3.y - t2.y * t3.x);
-
     // coplanar if 0 == (t1 . (t2 x t3))
-    return (0 == (t1.x * t4.x + t1.y * t4.y + t1.z * t4.z));
+    return (0 == dotProd(t1, crossProd(t2, t3)));
 }
 
 static bool nondegenerate(const vector<Point>& p) {
-    cerr << p.size() << endl;
     for ( int i = 0; i < p.size(); ++i ) {
         for ( int j = i + 1; j < p.size(); ++j ) {
             for ( int k = j + 1; k < p.size(); ++k ) {
@@ -109,6 +115,100 @@ static bool nondegenerate(const vector<Point>& p) {
         }
     }
     return true;
+}
+
+// From O'Rourke, Computational Geometry in C, Code 4.16
+// if a point is "outside" then vSign == -1
+static int vSign( const Tri& t, const Point& p ) {
+    Point t1(t.a.x - p.x, t.a.y - p.y, t.a.z - p.z);
+    Point t2(t.b.x - p.x, t.b.y - p.y, t.b.z - p.z);
+    Point t3(t.c.x - p.x, t.c.y - p.y, t.c.z - p.z);
+
+    // vSign = sign(t1 . (t2 x t3))
+    float vol = dotProd(t1, crossProd(t2, t3));
+    return vol > 0.01 ? 1 : vol < -0.01 ? -1 : 0;
+}
+
+// Distance from point to the plane described by a triangle
+// Equation (12,13) of http://mathworld.wolfram.com/Point-PlaneDistance.html
+static float distPointToTri( const Point& p, const Tri& t ) {
+    Point t1(t.b.x - t.a.x, t.b.y - t.a.y, t.b.z - t.a.z); // b - a
+    Point t2(t.c.x - t.c.x, t.c.y - t.c.y, t.c.z - t.c.z); // c - a
+
+    Point n = crossProd(t1, t2);
+    float nSize = sqrt(dotProd(n, n));
+    Point nhat(n.x / nSize, n.y / nSize, n.z / nSize);
+
+    Point t3(p.x - t.a.x, p.y - t.a.y, p.z - t.a.y); // p - a
+    return dotProd(nhat, t3);
+}
+
+// 3D Quickhull Algorithm
+static void quickhull(vector<Point> p) { // Passes a COPY of the points. Intentional.
+    vector<Tri> t;
+    faces = &t;
+    cout << "Assignment OK\n";
+    // create simplex of 4 points
+    int perm[4][4] = { { 0, 1, 2, 3 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 }, { 1, 2, 3, 0 } };
+    for ( int i = 0; i < 4; ++i ) {
+        Tri f(p[perm[i][0]], p[perm[i][1]], p[perm[i][2]]);
+        if ( vSign(f, p[perm[i][3]]) < 0 ) { // Make the orientations correct: any other point
+                                            // on the hull should be "inside"
+            Point temp = f.c;
+            f.c = f.b;
+            f.b = temp;
+        }
+        t.push_back(f);
+    }
+    for ( int i = 0; i < 4; ++i ) { // Add adjacent pointers
+        for ( int j = 0; j < 4; ++j ) {
+            if ( i != j ) {
+                t[i].adjacent.push_back(&(t[j]));
+            }
+        }
+    }
+
+    cout << "Tet OK\n";
+
+    queue<Tri*> t_to_process;
+    // for each facet F, for each unassigned point p, if p is above F, assign p to F's outside set
+    //      if F has outside points, we will process it later...
+    for ( int i = 0; i < 4; ++i ) {
+        for ( int j = 0; j < p.size(); ++j ) {
+            if ( !p[j].assigned && vSign(t[i], p[j]) < 0 ) {
+                t[i].outside_set.push_back(&(p[j]));
+                p[j].assigned = true;
+            }
+        }
+        cout << i << ' ' << t[i].outside_set.size() << '\n';
+        if ( t[i].outside_set.size() > 0 )
+            t_to_process.push(&(t[i]));
+    }
+
+    cout << "Outside set OK\n";
+
+    // for each facet F with a non-empty outside set
+    while ( ! t_to_process.empty() ) {
+        Tri* f = t_to_process.front();
+        t_to_process.pop();
+
+        cout << "Pop OK\n";
+
+        // select the furthest point p of F's outside set
+        int argmax = 0;
+        int max = distPointToTri( *(f->outside_set[0]), *f );
+        for ( int j = 1; j < f->outside_set.size(); ++j ) {
+            int dist = distPointToTri( *(f->outside_set[j]), *f );
+            if ( dist > max ) {
+                max = dist;
+                argmax = j;
+            }
+        }
+
+        // initialize the visible set V to F
+    }
+
+    // faces = tTemp;
 }
 
 static void resize(int width, int height)
@@ -212,7 +312,7 @@ static void display(void)
 
         renderPoints(*points);
 
-        if (facesOn)
+        
             renderFaces(*faces);
 
 
@@ -227,11 +327,10 @@ static void key(unsigned char key, int x, int y)
     switch (key)
     {
         case 27 :
-        case 'q':
             exit(0);
             break;
-        case 'f':
-            facesOn = !facesOn;
+        case 'q':
+            quickhull(*points);
             break;
         case 'a':
             xRot -= rotSpeed;
@@ -245,7 +344,6 @@ static void key(unsigned char key, int x, int y)
         case 's':
             yRot += rotSpeed;
             break;
-
     }
 
     glutPostRedisplay();
