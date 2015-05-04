@@ -16,7 +16,11 @@
 #include <queue>
 #include <iostream>
 #include <fstream>
+#include <chrono>
+#include <thread>
+
 #include <math.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -27,10 +31,11 @@ struct Color {
 
 
 struct Point {
+    int index;
     float x,y,z;
     Color col;
     bool assigned; // For use with Quickhull
-    Point(float x = 0, float y = 0, float z = 0, Color c = Color(1,0,0,1)) : x(x), y(y), z(z), col(c), assigned(false) {}
+    Point(float x = 0, float y = 0, float z = 0, int index = -1, Color c = Color(1,0,0,1)) : index(index), x(x), y(y), z(z), col(c), assigned(false) {}
 };
 bool operator==(const Point& lhs, const Point& rhs) {
     return (lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z);
@@ -133,7 +138,7 @@ static int vSign( const Tri& t, const Point& p ) {
 // Equation (12,13) of http://mathworld.wolfram.com/Point-PlaneDistance.html
 static float distPointToTri( const Point& p, const Tri& t ) {
     Point t1(t.b.x - t.a.x, t.b.y - t.a.y, t.b.z - t.a.z); // b - a
-    Point t2(t.c.x - t.c.x, t.c.y - t.c.y, t.c.z - t.c.z); // c - a
+    Point t2(t.c.x - t.a.x, t.c.y - t.a.y, t.c.z - t.a.z); // c - a
 
     Point n = crossProd(t1, t2);
     float nSize = sqrt(dotProd(n, n));
@@ -144,9 +149,10 @@ static float distPointToTri( const Point& p, const Tri& t ) {
 }
 
 // 3D Quickhull Algorithm
-static void quickhull(vector<Point> p) { // Passes a COPY of the points. Intentional.
-    vector<Tri> t;
-    faces = &t;
+static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the points. Intentional.
+    t.clear();
+    this_thread::sleep_for(chrono::milliseconds(200));
+    glutPostRedisplay();
     cout << "Assignment OK\n";
     // create simplex of 4 points
     int perm[4][4] = { { 0, 1, 2, 3 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 }, { 1, 2, 3, 0 } };
@@ -159,6 +165,8 @@ static void quickhull(vector<Point> p) { // Passes a COPY of the points. Intenti
             f.b = temp;
         }
         t.push_back(f);
+        this_thread::sleep_for(chrono::milliseconds(200));
+        glutPostRedisplay();
     }
     for ( int i = 0; i < 4; ++i ) { // Add adjacent pointers
         for ( int j = 0; j < 4; ++j ) {
@@ -178,26 +186,27 @@ static void quickhull(vector<Point> p) { // Passes a COPY of the points. Intenti
             if ( !p[j].assigned && vSign(t[i], p[j]) < 0 ) {
                 t[i].outside_set.push_back(&(p[j]));
                 p[j].assigned = true;
+                cout << i << ' ' << t[i].outside_set.size() << '\n';
             }
         }
-        cout << i << ' ' << t[i].outside_set.size() << '\n';
-        if ( t[i].outside_set.size() > 0 )
+        if ( t[i].outside_set.size() > 0 ) {
             t_to_process.push(&(t[i]));
+        }
     }
 
     cout << "Outside set OK\n";
 
     // for each facet F with a non-empty outside set
-    while ( ! t_to_process.empty() ) {
+    while ( t_to_process.size() > 0 ) {
         Tri* f = t_to_process.front();
         t_to_process.pop();
 
         cout << "Pop OK\n";
 
         // select the furthest point p of F's outside set
-        int argmax = 0;
-        int max = distPointToTri( *(f->outside_set[0]), *f );
-        for ( int j = 1; j < f->outside_set.size(); ++j ) {
+        int argmax = -1;
+        int max = 0;
+        for ( int j = 0; j < f->outside_set.size(); ++j ) {
             int dist = distPointToTri( *(f->outside_set[j]), *f );
             if ( dist > max ) {
                 max = dist;
@@ -205,10 +214,10 @@ static void quickhull(vector<Point> p) { // Passes a COPY of the points. Intenti
             }
         }
 
+        points->at(f->outside_set[argmax]->index).col.g = 1;
         // initialize the visible set V to F
-    }
 
-    // faces = tTemp;
+    }
 }
 
 static void resize(int width, int height)
@@ -330,7 +339,7 @@ static void key(unsigned char key, int x, int y)
             exit(0);
             break;
         case 'q':
-            quickhull(*points);
+            quickhull(*points, *faces);
             break;
         case 'a':
             xRot -= rotSpeed;
@@ -387,12 +396,13 @@ int main(int argc, char *argv[])
             cerr << "Error: Could not open file " << file_name << "\n";
             return EXIT_FAILURE;
         }
-
+        int index = 0;
         int x, y, z;
         while ( ifs >> x ) {
             ifs >> y;
             ifs >> z;
-            p.push_back(Point(x,y,z));
+            p.push_back(Point(x,y,z,index));
+            ++index;
         }
 
         if ( p.size() < 4 ) {
@@ -410,10 +420,10 @@ int main(int argc, char *argv[])
         cout << "Please enter your points in the following format:\nx y z\n\n";
 
         int x, y, z;
-        for ( int i = 1; i <= N; ++i ) {
-            cout << "Point #" << i << ": ";
+        for ( int i = 0; i < N; ++i ) {
+            cout << "Point #" << i+1 << ": ";
             cin >> x >> y >> z;
-            p.push_back(Point(x,y,z));
+            p.push_back(Point(x,y,z,i));
         }
     }
 
