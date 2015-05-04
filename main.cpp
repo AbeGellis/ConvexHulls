@@ -18,27 +18,37 @@
 
 using namespace std;
 
+struct Color {
+    float r,g,b,a;
+    Color(float r = 0, float g = 0, float b = 0, float a = 0) {this->r = r; this->b = b; this->g = g; this->a = a;}
+};
+
+
 struct Point {
     float x,y,z;
-    Point(float x = 0, float y = 0, float z = 0) {this->x = x; this->y = y; this->z = z;}
+    Color col;
+    Point(float x = 0, float y = 0, float z = 0, Color c = Color(1,0,0,1)) {this->x = x; this->y = y; this->z = z; col = c;}
 };
 
 struct Line {
     Point a, b;
+    Color col;
 
-    Line(float x1, float y1, float z1, float x2, float y2, float z2) {
+    Line(float x1, float y1, float z1, float x2, float y2, float z2, Color c = Color(1,0,0,.5)) {
         a = Point(x1,y1,z1);
         b = Point(x2,y2,z2);
+        col = c;
     }
 };
 
 struct Tri {
     Point a, b, c;
-
-    Tri(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3) {
+    Color col;
+    Tri(float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3, Color col = Color(1,0,0,.5)) {
         a = Point(x1,y1,z1);
         b = Point(x2,y2,z2);
         c = Point(x3,y3,z3);
+        this->col = col;
     }
 
 };
@@ -118,6 +128,7 @@ static void renderFaces(const vector<Tri>& tris) {
     glEnable(GL_LIGHTING);
     glBegin(GL_TRIANGLES);
     for (size_t i = 0; i < tris.size(); ++i) {
+        glColor4f(tris[i].col.r, tris[i].col.g, tris[i].col.b, tris[i].col.a);
         glNormal3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
         glVertex3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
 
@@ -134,6 +145,7 @@ static void renderLines(const vector<Line>& lines) {
     glDisable(GL_LIGHTING);
     glBegin(GL_LINES);
     for (size_t i = 0; i < lines.size(); ++i) {
+        glColor4f(lines[i].col.r, lines[i].col.g, lines[i].col.b, lines[i].col.a);
         glVertex3f(lines[i].a.x,lines[i].a.y,lines[i].a.z);
         glVertex3f(lines[i].b.x,lines[i].b.y,lines[i].b.z);
     }
@@ -144,6 +156,7 @@ static void renderPoints(const vector<Point>& points) {
     glDisable(GL_LIGHTING);
     glBegin(GL_POINTS);
     for (size_t i = 0; i < points.size(); ++i) {
+        glColor4f(points[i].col.r, points[i].col.g, points[i].col.b, points[i].col.a);
         glVertex3f(points[i].x,points[i].y,points[i].z);
     }
     glEnd();
@@ -195,12 +208,10 @@ static void display(void)
         glRotated(yRot,1,0,0);
         glScaled(scale, scale, scale);
 
-        glColor4d(1,0,0,1);
         renderLines(*lines);
 
         renderPoints(*points);
 
-        glColor4d(1,0,0,.5);
         if (facesOn)
             renderFaces(*faces);
 
