@@ -37,7 +37,7 @@ struct Color {
 
 
 static Color randomColor(float alpha = .5) {
-    return Color((float) (rand() % 600 + 400) / 1000, (float) (rand() % 600) / 1000, (float) (rand() % 600) / 1000, alpha);
+    return Color((float) (rand() % 700 + 300) / 1000, (float) (rand() % 600) / 1000, (float) (rand() % 600) / 1000, alpha);
 }
 
 struct Point {
@@ -88,6 +88,13 @@ struct Tri {
         v.push_back(Line(a,c));
         v.push_back(Line(c,b));
         v.push_back(Line(b,a));
+        return v;
+    }
+    vector<Point> getPointSet() {
+        vector<Point> v;
+        v.push_back(a);
+        v.push_back(b);
+        v.push_back(c);
         return v;
     }
 };
@@ -264,9 +271,8 @@ static void sleep(int millis) {
 // 3D Quickhull Algorithm
 static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the points. Intentional.
     t.clear();
-    sleep(SLEEP_TIME);
     display();
-    cout << "Assignment OK\n";
+    sleep(SLEEP_TIME);
     // create simplex of 4 points
     int perm[4][4] = { { 0, 1, 2, 3 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 }, { 1, 2, 3, 0 } };
     for ( int i = 0; i < 4; ++i ) {
@@ -277,22 +283,15 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             f.c = f.b;
             f.b = temp;
         }
-                    lines->clear();
-                    lines->push_back(Line(f.a,f.b,Color(1,1,0,1)));
-                    lines->push_back(Line(f.b,f.c,Color(1,0,1,1)));
-                    lines->push_back(Line(f.c,f.a,Color(0,1,0,1)));
-                    display();
         t.push_back(f);
-        sleep(SLEEP_TIME);
         display();
+        sleep(SLEEP_TIME);
     }
     for ( int i = 0; i < 4; ++i ) { // Add adjacent pointers
         for ( int j = 0; j < 4; ++j ) {
             t[i].adjacent.insert(&(t[j]));
         }
     }
-
-    cout << "Tet OK\n";
 
     queue<Tri*> t_to_process;
     // for each facet F, for each unassigned point p, if p is above F, assign p to F's outside set
@@ -309,21 +308,13 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
         }
     }
 
-    cout << "Outside set OK\n";
-
-    int round = 0;
-
     // for each facet F with a non-empty outside set
     while ( t_to_process.size() > 0 ) {
-        cout << "round: " << round << '\n';
-        round++;
         Tri *f = t_to_process.front();
         t_to_process.pop();
 
         if ( f->del )
             continue;
-
-        cout << "Pop OK\n";
 
         f->col = Color(1,1,1,0.8);
         display();
@@ -332,10 +323,8 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
         // select the furthest point p of F's outside set
         Point *argmax = 0;
         float max = -1000000;
-        cout << "Outside size: " << f->outside_set.size() << '\n';
         //for ( int j = 0; j < f->outside_set.size(); ++j ) {
         for ( set<Point*>::iterator it = f->outside_set.begin(); it != f->outside_set.end(); ++it ) {
-            cout << (*it)->index << '\n';
             int dist = distPointToTri( *(*it), *f );
             if ( dist > max ) {
                 max = dist;
@@ -347,8 +336,6 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             continue;
 
         int argmax_real_index = argmax->index;
-
-        cout << "point: " << argmax_real_index << '\n';
 
         points->at(argmax_real_index).col.g = 1;
         display();
@@ -376,8 +363,6 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             display();
             sleep(SLEEP_TIME);
         }
-        sleep(SLEEP_TIME);
-        display();
         
         // the boundary of V is the set of horizon ridges H
         // for each ridge R in H
@@ -437,7 +422,6 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                     lines->push_back(Line(newF.a,newF.b,Color(1,1,0,1)));
                     lines->push_back(Line(newF.b,newF.c,Color(1,0,1,1)));
                     lines->push_back(Line(newF.c,newF.a,Color(0,1,0,1)));
-                    display();
                     t.push_back(newF);
                     display();
                     sleep(SLEEP_TIME);
@@ -445,26 +429,20 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                     for ( int k = 0; k < t.size(); ++k ) {
                         if ( t[k].del ) // Ignore deleted facets
                             continue;
-                        vector<Line> halfLines1 = t[k].getReverseHalfEdges();
-                        vector<Line> halfLines2 = t.back().getHalfEdges();
+                        vector<Point> ptset1 = t[k].getPointSet();
+                        vector<Point> ptset2 = t.back().getPointSet();
                         bool done = false;
-                        for ( int m = 0; !done && m < halfLines1.size(); ++m ) {
-                            for ( int n = 0; !done && n < halfLines2.size(); ++n ) {
-                                if ( halfLines1[m] == halfLines2[n] ) {
-                                     Color tc = t[k].col;
-                                     t[k].col = Color(1,1,1,0.8);
-                                     lines->push_back(halfLines1[m]);
-                                    display();
-                                    sleep(SLEEP_TIME);
+                        for ( int m = 0; !done && m < ptset1.size(); ++m ) {
+                            for ( int n = 0; !done && n < ptset2.size(); ++n ) {
+                                if ( ptset1[m] == ptset2[n] ) {
                                     t.back().adjacent.insert(&(t[k]));
                                     t[k].adjacent.insert(&(t.back()));
-                                     t[k].col = tc;
                                     done = true;
                                 }
                             }
                         }
                     }
-                    t.back().adjacent.insert(&(t.back()));
+                    
                     // For each unassigned point q in an outside set of a facet of V
                     for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
                         if ( !(*it)->vis )
@@ -477,19 +455,16 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                             }
                         }
                     }
-                    cout << "Outside size: " << t.back().outside_set.size() << '\n';
 
                     if ( t.back().outside_set.size() > 0 ) {
                         t_to_process.push(&(t.back()));
-                        cout << "Push!\n";
                     }
                     lines->clear();
-                    sleep(SLEEP_TIME);
                     display();
+                    sleep(SLEEP_TIME);
                 }
             }
         }
-        cout << "Ready to delete\n";
         // Delete the facets in V
         for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
             if ( (*it)->vis ) {
@@ -497,8 +472,8 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             }
         }
         points->at(argmax_real_index).col.g = 0;
-        sleep(SLEEP_TIME);
         display();
+        sleep(SLEEP_TIME);
     }
 }
 
