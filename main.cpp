@@ -20,11 +20,12 @@
 
 #include <stdlib.h>
 #include <vector>
+#include <set>
 #include <queue>
 #include <iostream>
 #include <fstream>
 
-#include <math.h>
+#include <cmath>
 #include <unistd.h>
 
 using namespace std;
@@ -36,7 +37,7 @@ struct Color {
 
 
 static Color randomColor(float alpha = .5) {
-    return Color((float) (rand() % 1000) / 1000, (float) (rand() % 1000) / 1000, (float) (rand() % 1000) / 1000, alpha);
+    return Color((float) (rand() % 600 + 400) / 1000, (float) (rand() % 600) / 1000, (float) (rand() % 600) / 1000, alpha);
 }
 
 struct Point {
@@ -59,15 +60,36 @@ struct Line {
 
     Line(Point a, Point b, Color c = Color(1,0,0,.5)) : a(a), b(b), col(c) {}
 };
+bool operator==(const Line& lhs, const Line& rhs) {
+    return (lhs.a == rhs.a && lhs.b == rhs.b);
+}
+bool operator!=(const Line& lhs, const Line& rhs) {
+    return !(lhs == rhs);
+}
 
 struct Tri {
     Point a, b, c;
     Color col;
-    vector<Point*> outside_set; // For use with Quickhull
-    vector<Tri*> adjacent; // For use with Quickhull
+    set<Point*> outside_set; // For use with Quickhull
+    set<Tri*> adjacent; // For use with Quickhull
     bool vis; // For use with Quickhull
     bool del; // For use with Quickhull
     Tri(Point a, Point b, Point c, Color col = randomColor()) : a(a), b(b), c(c), col(col), vis(false), del(false) {}
+
+    vector<Line> getHalfEdges() {
+        vector<Line> v;
+        v.push_back(Line(a,b));
+        v.push_back(Line(b,c));
+        v.push_back(Line(c,a));
+        return v;
+    }
+    vector<Line> getReverseHalfEdges() {
+        vector<Line> v;
+        v.push_back(Line(a,c));
+        v.push_back(Line(c,b));
+        v.push_back(Line(b,a));
+        return v;
+    }
 };
 bool operator==(const Tri& lhs, const Tri& rhs) {
     return (lhs.a == rhs.a && lhs.b == rhs.b && lhs.c == rhs.c);
@@ -85,6 +107,8 @@ static bool facesOn = true;
 static double xRot = 0, yRot = 0;
 static double rotSpeed = 10;
 const double POINT_SIZE = 2;
+const float EPS = 0.0001; // eps for floating point precision errors...
+const int SLEEP_TIME = 500;
 /* GLUT callback Handlers */
 
 static void renderFaces(const vector<Tri>& tris) {
@@ -211,7 +235,7 @@ static int vSign( const Tri& t, const Point& p ) {
 
     // vSign = sign(t1 . (t2 x t3))
     float vol = dotProd(t1, crossProd(t2, t3));
-    return vol > 0.01 ? 1 : vol < -0.01 ? -1 : 0;
+    return vol > 0 ? 1 : vol < 0 ? -1 : 0;
 }
 
 // Distance from point to the plane described by a triangle
@@ -225,7 +249,7 @@ static float distPointToTri( const Point& p, const Tri& t ) {
     Point nhat(n.x / nSize, n.y / nSize, n.z / nSize);
 
     Point t3(p.x - t.a.x, p.y - t.a.y, p.z - t.a.y); // p - a
-    return dotProd(nhat, t3);
+    return (dotProd(nhat, t3));
 }
 
 
@@ -233,33 +257,38 @@ static void sleep(int millis) {
 #ifdef _WIN32
     Sleep(millis);
 #else
-    this_thread::sleep_for(chrono::milliseconds(200));
+    this_thread::sleep_for(chrono::milliseconds(millis));
 #endif
 }
 
 // 3D Quickhull Algorithm
 static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the points. Intentional.
     t.clear();
-    sleep(200);
+    sleep(SLEEP_TIME);
     display();
     cout << "Assignment OK\n";
     // create simplex of 4 points
     int perm[4][4] = { { 0, 1, 2, 3 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 }, { 1, 2, 3, 0 } };
     for ( int i = 0; i < 4; ++i ) {
         Tri f(p[perm[i][0]], p[perm[i][1]], p[perm[i][2]]);
-        if ( !p[perm[i][3]].assigned && vSign(f, p[perm[i][3]]) < 0 ) { // Make the orientations correct: any other point
+        if ( vSign(f, p[perm[i][3]]) < 0 ) { // Make the orientations correct: any other point
                                             // on the hull should be "inside"
             Point temp = f.c;
             f.c = f.b;
             f.b = temp;
         }
+                    lines->clear();
+                    lines->push_back(Line(f.a,f.b,Color(1,1,0,1)));
+                    lines->push_back(Line(f.b,f.c,Color(1,0,1,1)));
+                    lines->push_back(Line(f.c,f.a,Color(0,1,0,1)));
+                    display();
         t.push_back(f);
-        sleep(200);
+        sleep(SLEEP_TIME);
         display();
     }
     for ( int i = 0; i < 4; ++i ) { // Add adjacent pointers
         for ( int j = 0; j < 4; ++j ) {
-            t[i].adjacent.push_back(&(t[j]));
+            t[i].adjacent.insert(&(t[j]));
         }
     }
 
@@ -270,8 +299,8 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
     //      if F has outside points, we will process it later...
     for ( int i = 0; i < 4; ++i ) {
         for ( int j = 0; j < p.size(); ++j ) {
-            if ( vSign(t[i], p[j]) < 0 ) {
-                t[i].outside_set.push_back(&(p[j]));
+            if ( !p[j].assigned && vSign(t[i], p[j]) < 0 ) {
+                t[i].outside_set.insert(&(p[j]));
                 p[j].assigned = true;
             }
         }
@@ -296,161 +325,179 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
 
         cout << "Pop OK\n";
 
+        f->col = Color(1,1,1,0.8);
+        display();
+        sleep(SLEEP_TIME);
+
         // select the furthest point p of F's outside set
-        int argmax = -1;
-        int max = 0;
+        Point *argmax = 0;
+        float max = -1000000;
         cout << "Outside size: " << f->outside_set.size() << '\n';
-        for ( int j = 0; j < f->outside_set.size(); ++j ) {
-            cout << f->outside_set[j]->index << '\n';
-            int dist = distPointToTri( *(f->outside_set[j]), *f );
+        //for ( int j = 0; j < f->outside_set.size(); ++j ) {
+        for ( set<Point*>::iterator it = f->outside_set.begin(); it != f->outside_set.end(); ++it ) {
+            cout << (*it)->index << '\n';
+            int dist = distPointToTri( *(*it), *f );
             if ( dist > max ) {
                 max = dist;
-                argmax = j;
+                argmax = *it;
             }
         }
 
-        int argmax_real_index = f->outside_set[argmax]->index;
+        if ( argmax == 0 )
+            continue;
+
+        int argmax_real_index = argmax->index;
 
         cout << "point: " << argmax_real_index << '\n';
 
         points->at(argmax_real_index).col.g = 1;
-        sleep(200);
         display();
-
+        sleep(SLEEP_TIME);
 
         // initialize the visible set V to F
         // for all neighbors N of facets to F
-        for ( int j = 0; j < f->adjacent.size(); ++j ) {
-            if ( f->adjacent[j]->del ) // Ignore deleted facets
+        for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
+            if ( (*it)->del ) // Ignore deleted facets
                 continue;
+            Color tc = (*it)->col;
+            (*it)->col = Color(0,0,1,0.8);
+            display();
+            sleep(SLEEP_TIME);
             // if p is above N, add N to V
-            if ( vSign( *(f->adjacent[j]), *(f->outside_set[argmax]) ) < 0 ) {
-                f->adjacent[j]->vis = true;
-                f->adjacent[j]->col.r = 0;
+            if ( vSign( *(*it), *argmax ) < 0 ) {
+                (*it)->vis = true;
+                (*it)->col = Color(0,1,0,0.8);
+                for ( set<Point*>::iterator it2 = (*it)->outside_set.begin(); it2 != (*it)->outside_set.end(); ++it2 ) {
+                    (*it2)->assigned = false;
+                }
             }
+            if ( !(*it)->vis )
+                (*it)->col = tc;
+            display();
+            sleep(SLEEP_TIME);
         }
-        sleep(200);
+        sleep(SLEEP_TIME);
         display();
-
+        
         // the boundary of V is the set of horizon ridges H
         // for each ridge R in H
         for ( int i = 0; i < p.size(); ++i ) { // This probably could have been implemented
                                                 // more efficiently using proper data structure
             for ( int j = 0; j < p.size(); ++j ) {
-
-                int vis_count = 0;
-                for ( int k = 0; k < t.size(); ++k ) {
+                bool ridge = false;
+                for ( int k = 0; !ridge && k < t.size(); ++k ) {
                     if ( t[k].del ) // Ignore deleted facets
                         continue;
-                    if ( t[k].vis && ((t[k].a == p[i] && t[k].b == p[j])
-                        || (t[k].a == p[i] && t[k].c == p[j])
-                        || (t[k].b == p[i] && t[k].c == p[j])
-                        || (t[k].a == p[j] && t[k].b == p[i])
-                        || (t[k].a == p[j] && t[k].c == p[i])
-                        || (t[k].b == p[j] && t[k].c == p[i])
-                        )) {
-                        vis_count++;
-
-                        if ( vis_count >= 2 )
-                            break;
+                    if ( t[k].vis ) {
+                        Line l(p[i], p[j]);
+                        vector<Line> halfEdges = t[k].getHalfEdges();
+                        for ( int m = 0; m < halfEdges.size(); ++m ) {
+                            if ( halfEdges[m] == l ) {
+                                ridge = true;
+                                break;
+                            }
+                        }
                     }
                 }
-
-                if ( vis_count == 1) {
-                    // create a new facet F' from R and p
-                    Tri newF(p[i],p[j],p[argmax_real_index]);
-                    for ( int k = 0; k < t.size(); ++k ) {// Make the orientations correct: any other point
-                                                            // on the hull should be "inside"
-                        if ( t[k].a != p[i] && t[k].a != p[j] ) {
-                            if ( vSign(newF, t[k].a) < 0 ) {
-                                Point temp = newF.a;
-                                newF.a = newF.b;
-                                newF.b = temp;
-                                break;
-                            }
-                        }
-                        if ( t[k].b != p[i] && t[k].b != p[j] ) {
-                            if ( vSign(newF, t[k].b) < 0 ) {
-                                Point temp = newF.a;
-                                newF.a = newF.b;
-                                newF.b = temp;
-                                break;
-                            }
-                        }
-                        if ( t[k].c != p[i] && t[k].c != p[j] ) {
-                            if ( vSign(newF, t[k].c) < 0 ) {
-                                Point temp = newF.a;
-                                newF.a = newF.b;
-                                newF.b = temp;
+                if ( !ridge )
+                    continue;
+                for ( int k = 0; ridge && k < t.size(); ++k ) {
+                    if ( t[k].del ) // Ignore deleted facets
+                        continue;
+                    if ( t[k].vis ) {
+                        Line l(p[i], p[j]);
+                        vector<Line> halfEdges = t[k].getReverseHalfEdges();
+                        for ( int m = 0; m < halfEdges.size(); ++m ) {
+                            if ( halfEdges[m] == l ) {
+                                ridge = false;
                                 break;
                             }
                         }
                     }
+                }
+                if ( ridge ) {
+                    // create a new facet F' from R and p
+                    Tri newF(p[i],p[j],p[argmax_real_index]);
+/*                    bool flag = false;
+                    for ( int k = 0; k < t.size() && !flag; ++k ) {// Make the orientations correct: any other point
+                                                            // on the hull should be "inside"
+                        Point pts[3] = { t[k].a, t[k].b, t[k].c };
+                        for ( int m = 0; m < 3 && !flag; ++m ) {
+                            if ( pts[m] != p[i] && pts[m] != p[j] ) {
+                                if ( vSign(newF, pts[m]) < 0 ) {
+                                    Point temp = newF.a;
+                                    newF.a = newF.b;
+                                    newF.b = temp;
+                                    flag = true;
+                                }
+                            }
+                        }
+                    }*/
+                    lines->clear();
+                    lines->push_back(Line(newF.a,newF.b,Color(1,1,0,1)));
+                    lines->push_back(Line(newF.b,newF.c,Color(1,0,1,1)));
+                    lines->push_back(Line(newF.c,newF.a,Color(0,1,0,1)));
+                    display();
                     t.push_back(newF);
+                    display();
+                    sleep(SLEEP_TIME);
                     // Link the new facet to its neighbors
                     for ( int k = 0; k < t.size(); ++k ) {
                         if ( t[k].del ) // Ignore deleted facets
                             continue;
-                         if ( (t[k].a == newF.a && t[k].b == newF.b)
-                            || (t[k].a == newF.a && t[k].c == newF.b)
-                            || (t[k].b == newF.a && t[k].c == newF.b)
-                            || (t[k].a == newF.b && t[k].b == newF.a)
-                            || (t[k].a == newF.b && t[k].c == newF.a)
-                            || (t[k].b == newF.b && t[k].c == newF.a)
-                            || (t[k].a == newF.a && t[k].b == newF.c)
-                            || (t[k].a == newF.a && t[k].c == newF.c)
-                            || (t[k].b == newF.a && t[k].c == newF.c)
-                            || (t[k].a == newF.c && t[k].b == newF.a)
-                            || (t[k].a == newF.c && t[k].c == newF.a)
-                            || (t[k].b == newF.c && t[k].c == newF.a)
-                            || (t[k].a == newF.b && t[k].b == newF.c)
-                            || (t[k].a == newF.b && t[k].c == newF.c)
-                            || (t[k].b == newF.b && t[k].c == newF.c)
-                            || (t[k].a == newF.c && t[k].b == newF.b)
-                            || (t[k].a == newF.c && t[k].c == newF.b)
-                            || (t[k].b == newF.c && t[k].c == newF.b)
-                            ) {
-                            t.back().adjacent.push_back(&(t[k]));
+                        vector<Line> halfLines1 = t[k].getReverseHalfEdges();
+                        vector<Line> halfLines2 = t.back().getHalfEdges();
+                        bool done = false;
+                        for ( int m = 0; !done && m < halfLines1.size(); ++m ) {
+                            for ( int n = 0; !done && n < halfLines2.size(); ++n ) {
+                                if ( halfLines1[m] == halfLines2[n] ) {
+                                     Color tc = t[k].col;
+                                     t[k].col = Color(1,1,1,0.8);
+                                     lines->push_back(halfLines1[m]);
+                                    display();
+                                    sleep(SLEEP_TIME);
+                                    t.back().adjacent.insert(&(t[k]));
+                                    t[k].adjacent.insert(&(t.back()));
+                                     t[k].col = tc;
+                                    done = true;
+                                }
+                            }
                         }
                     }
-                    t.back().adjacent.push_back(&(t.back()));
-
-                    // For each point q in an outside set of a facet of V
-                    for ( int j = 0; j < p.size(); ++j ) {
-                        // if q is above F' assing q to F''s outside set
-                        if ( !p[j].assigned && vSign(t.back(), p[j]) < 0 ) {
-                            t.back().outside_set.push_back(&(p[j]));
-                            p[j].assigned = true;
+                    t.back().adjacent.insert(&(t.back()));
+                    // For each unassigned point q in an outside set of a facet of V
+                    for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
+                        if ( !(*it)->vis )
+                            continue;
+                        // if q is above F' add q to F''s outside set
+                        for ( set<Point*>::iterator it2 = (*it)->outside_set.begin(); it2 != (*it)->outside_set.end(); ++it2 ) {
+                            if ( !(*it2)->assigned && vSign(t.back(), **it2) < 0 ) {
+                                t.back().outside_set.insert(*it2);
+                                (*it2)->assigned = true;
+                            }
                         }
                     }
-
                     cout << "Outside size: " << t.back().outside_set.size() << '\n';
 
                     if ( t.back().outside_set.size() > 0 ) {
                         t_to_process.push(&(t.back()));
                         cout << "Push!\n";
                     }
-
-                    sleep(200);
+                    lines->clear();
+                    sleep(SLEEP_TIME);
                     display();
-
-
-
                 }
             }
         }
         cout << "Ready to delete\n";
-
         // Delete the facets in V
-        for ( int j = 0; j < f->adjacent.size(); ++j ) {
-            if ( f->adjacent[j]->vis ) {// Ignore deleted facets
-
-                f->adjacent[j]->del = true;
+        for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
+            if ( (*it)->vis ) {
+                (*it)->del = true;
             }
         }
-
         points->at(argmax_real_index).col.g = 0;
-        sleep(200);
+        sleep(SLEEP_TIME);
         display();
     }
 }
