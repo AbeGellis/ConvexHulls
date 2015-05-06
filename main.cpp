@@ -575,7 +575,7 @@ int main(int argc, char *argv[])
             }
             file_name = argv[i+1];
             using_file = true;
-            i += 2;
+            ++i;
             continue;
         }
         if ( strcmp(argv[i], "--pausetime") == 0 ) {
@@ -584,7 +584,7 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             SLEEP_TIME = atoi(argv[i+1]);
-            i += 2;
+            ++i;
             continue;
         }
         if ( strcmp(argv[i], "--pointsize") == 0 ) {
@@ -593,7 +593,7 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             POINT_SIZE = atoi(argv[i+1]);
-            i += 2;
+            ++i;
             continue;
         }
         if ( strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0 ) {
