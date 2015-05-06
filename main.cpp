@@ -604,7 +604,7 @@ int main(int argc, char *argv[])
                 << "\tw/a/s/d\t\t\t\t\tRotate up/left/down/right\n"
                 << "\tb\t\t\t\t\tSwitch the background color between black and white\n"
                 << "\tq\t\t\t\t\tPerform 3D QuickHull\n"
-                << "\tr\t\t\t\t\tReset all lines/faces (leaving only the pointset\n"
+                << "\tr\t\t\t\t\tReset all lines/faces (leaving only the pointset)\n"
                 << "\t[ESC]\t\t\t\t\tExit the program\n";
             return EXIT_SUCCESS;
         }
