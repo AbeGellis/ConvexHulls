@@ -522,7 +522,7 @@ static void key(unsigned char key, int x, int y)
             bg ^= 1;
             glClearColor(bg,bg,bg,1);
             break;
-        case 'c':
+        case 'r':
             lines->clear();
             faces->clear();
             for ( int i = 0; i < points->size(); ++i ) {
@@ -599,7 +599,13 @@ int main(int argc, char *argv[])
                 << "\t--pausetime [INT]\t\t\tMilliseconds to pause during visualizations, in ms (default 500)\n"
                 << "\t--pointset [STRING]\t\t\tFile to read point set from,\n"
                 << "\t\t\t\t\t\tpoints should be specified in \"x y z\" format, one point per line\n"
-                << "\t--pointsize [INT]\t\t\tRadius of each point, in pixels (default 2)\n";
+                << "\t--pointsize [INT]\t\t\tRadius of each point, in pixels (default 2)\n"
+                << "In-program commands:\n"
+                << "\tw/a/s/d\t\t\t\t\tRotate up/left/down/right\n"
+                << "\tb\t\t\t\t\tSwitch the background color between black and white\n"
+                << "\tq\t\t\t\t\tPerform 3D QuickHull\n"
+                << "\tr\t\t\t\t\tReset all lines/faces (leaving only the pointset\n"
+                << "\t[ESC]\t\t\t\t\tExit the program\n";
             return EXIT_SUCCESS;
         }
     }
