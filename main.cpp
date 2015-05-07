@@ -153,9 +153,8 @@ static vector<Line>* lines;
 static vector<Point>* points;
 static double scale = 1;
 static int bg = 0;
-const double MAX_SIZE = 2;
+const double DISPLAY_SIZE = .6;
 static bool facesOn = true;
-static double xRot = 0, yRot = 0;
 static double rotSpeed = 10;
 static double POINT_SIZE = 2;
 static int SLEEP_TIME = 500;
@@ -684,10 +683,7 @@ static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, c
         if (points[i].z > furthest) furthest = points[i].z;
     }
 
-    if (furthest > MAX_SIZE)
-        scale = MAX_SIZE / furthest;
-    else
-        scale = 1;
+    scale = DISPLAY_SIZE / furthest;
 }
 
 static void key(unsigned char key, int x, int y)
@@ -753,15 +749,15 @@ static void idle(void)
     glutPostRedisplay();
 }
 
-const GLfloat light_ambient[]  = { 0.0f, 0.0f, 0.0f, 1.0f };
+const GLfloat light_ambient[]  = { 0.2f, 0.2f, 0.2f, 1.0f };
 const GLfloat light_diffuse[]  = { 1.0f, 1.0f, 1.0f, 1.0f };
 const GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-const GLfloat light_position[] = { 2.0f, 5.0f, 5.0f, 0.0f };
+const GLfloat light_position[] = { 0.0f, 0.0f, 4.5f, 0.0f };
 
 const GLfloat mat_ambient[]    = { 0.7f, 0.7f, 0.7f, 0.5f };
 const GLfloat mat_diffuse[]    = { 0.8f, 0.8f, 0.8f, 0.5f };
 const GLfloat mat_specular[]   = { 1.0f, 1.0f, 1.0f, 0.5f };
-const GLfloat high_shininess[] = { 25.0f };
+const GLfloat high_shininess[] = { 75.0f };
 
 /* Program entry point */
 
@@ -860,6 +856,32 @@ int main(int argc, char *argv[])
     if ( !nondegenerate(p) ) {
         cerr << "Point set must be nondegenerate (no 3 points can be collinear, no 4 points coplanar).\n";
         return EXIT_FAILURE;
+    }
+
+    Point pmin, pmax;
+    for (vector<Point>::iterator it = p.begin(); it != p.end(); ++it) {
+        if (it->x < pmin.x)
+            pmin.x = it->x;
+        if (it->y < pmin.y)
+            pmin.y = it->y;
+        if (it->z < pmin.z)
+            pmin.z = it->z;
+
+
+        if (it->x > pmax.x)
+            pmax.x = it->x;
+        if (it->y > pmax.y)
+            pmax.y = it->y;
+        if (it->z > pmax.z)
+            pmax.z = it->z;
+    }
+
+    Point pavg((pmax.x - pmin.x)/2, (pmax.y - pmin.y)/2, (pmax.z - pmin.z)/2);
+
+    for (vector<Point>::iterator it = p.begin(); it != p.end(); ++it) {
+        it->x -= pavg.x;
+        it->y -= pavg.y;
+        it->z -= pavg.z;
     }
 
     vector<Tri> t;
