@@ -268,6 +268,38 @@ static void idle(void)
     glutPostRedisplay();
 }
 
+//Determines scale of rendered scene to fit everything onscreen
+static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
+    double furthest = 0;
+    double sqrdist;
+
+    for (size_t i = 0; i < tris.size(); ++i) {
+        sqrdist = dotProd(tris[i].a,tris[i].a);
+        if (sqrdist > furthest) furthest = sqrdist;
+
+        sqrdist = dotProd(tris[i].b,tris[i].b);
+        if (sqrdist > furthest) furthest = sqrdist;
+
+        sqrdist = dotProd(tris[i].c,tris[i].c);
+        if (sqrdist > furthest) furthest = sqrdist;
+    }
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+        sqrdist = dotProd(lines[i].a,lines[i].a);
+        if (sqrdist > furthest) furthest = sqrdist;
+
+        sqrdist = dotProd(lines[i].b,lines[i].b);
+        if (sqrdist > furthest) furthest = sqrdist;
+    }
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        sqrdist = dotProd(points[i],points[i]);
+        if (sqrdist > furthest) furthest = sqrdist;
+    }
+
+    scale = DISPLAY_SIZE / sqrt(furthest);
+}
+
 const GLfloat light_ambient[]  = { 0.2f, 0.2f, 0.2f, 1.0f };
 const GLfloat light_diffuse[]  = { 1.0f, 1.0f, 1.0f, 1.0f };
 const GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -377,38 +409,6 @@ static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPl
     Point planeNormal = normalize(vectorOrthoToPlane);
     float p = dotProd(toProject,planeNormal);
     return Point(toProject.x - (planeNormal.x * p), toProject.y - (planeNormal.y * p), toProject.z - (planeNormal.z * p));
-}
-
-//Determines scale of rendered scene to fit everything onscreen
-static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
-    double furthest = 0;
-    double sqrdist;
-
-    for (size_t i = 0; i < tris.size(); ++i) {
-        sqrdist = dotProd(tris[i].a,tris[i].a);
-        if (sqrdist > furthest) furthest = sqrdist;
-
-        sqrdist = dotProd(tris[i].b,tris[i].b);
-        if (sqrdist > furthest) furthest = sqrdist;
-
-        sqrdist = dotProd(tris[i].c,tris[i].c);
-        if (sqrdist > furthest) furthest = sqrdist;
-    }
-
-    for (size_t i = 0; i < lines.size(); ++i) {
-        sqrdist = dotProd(lines[i].a,lines[i].a);
-        if (sqrdist > furthest) furthest = sqrdist;
-
-        sqrdist = dotProd(lines[i].b,lines[i].b);
-        if (sqrdist > furthest) furthest = sqrdist;
-    }
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        sqrdist = dotProd(points[i],points[i]);
-        if (sqrdist > furthest) furthest = sqrdist;
-    }
-
-    scale = DISPLAY_SIZE / sqrt(furthest);
 }
 
 
