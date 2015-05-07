@@ -2,7 +2,7 @@
  * 3D Convex Hull Project
  * Patrick Lin, Abe Gellis
  *
- * Some elements derived from GLUT Shapes Demo by Nigel Stewart
+ * Some visualization elements derived from GLUT Shapes Demo by Nigel Stewart
  */
 
 #ifdef __APPLE__
@@ -287,7 +287,7 @@ static int vSign( const Tri& t, const Point& p ) {
 
     // vSign = sign(t1 . (t2 x t3))
     float vol = dotProd(t1, crossProd(t2, t3));
-    return vol > 0 ? 1 : vol < 0 ? -1 : 0;
+    return vol > 0.001 ? 1 : vol < -.001 ? -1 : 0;
 }
 
 // Distance from point to the plane described by a triangle
@@ -297,7 +297,7 @@ static float distPointToTri( const Point& p, const Tri& t ) {
     Point t2(t.c.x - t.a.x, t.c.y - t.a.y, t.c.z - t.a.z); // c - a
 
     Point n = crossProd(t1, t2);
-    float nSize = sqrt(dotProd(n, n));
+    float nSize = sqrtf(dotProd(n, n));
     Point nhat(n.x / nSize, n.y / nSize, n.z / nSize);
 
     Point t3(p.x - t.a.x, p.y - t.a.y, p.z - t.a.y); // p - a
@@ -306,7 +306,7 @@ static float distPointToTri( const Point& p, const Tri& t ) {
 
 // Normalizes a vector to unit length
 static Point normalize(const Point& original) {
-    float magnitude = sqrtf((original.x * original.x) + (original.y * original.y) + (original.z * original.z));
+    float magnitude = sqrtf(dotProd(original, original));
     if (magnitude == 0)
         return original;
     else
@@ -339,7 +339,7 @@ static void pauseForDisplay() {
 // Visualization:
 // - At every iteration, the current partial hull is varying shades of red.
 // - The current face F being processed and optimal outside point are colored yellow (if bg is white, pt is blue instead)
-// - The neighbors F' of F (including F) are considered in turn (blue) and colored green if they are visible from p
+// - The neighbors F' of F (including F) are colored green if they are visible from p
 // - New faces are drawn from p to the boundary edges of the visible region, each triangle outlined in yellow, magenta, green as drawn
 // - The visible (green) faces disappear
 static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the points. Intentional: properties of the points are modified
@@ -419,9 +419,6 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
         for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
             if ( (*it)->del ) // Ignore deleted facets
                 continue;
-            Color tc = (*it)->col;
-            (*it)->col = Color(0,0,1,0.5);
-            pauseForDisplay();
             // if p is above N, add N to V
             if ( vSign( *(*it), *argmax ) < 0 ) {
                 (*it)->vis = true;
@@ -431,10 +428,8 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                     (*it2)->assigned = false;
                 }
             }
-            if ( !(*it)->vis )
-                (*it)->col = tc;
-            pauseForDisplay();
         }
+        pauseForDisplay();
 
         // the boundary of V is the set of horizon ridges H
         // for each ridge R in H
@@ -519,7 +514,6 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
 // - The algorithm generates an initial face of the convex hull and outlines it in blue.
 // - At every iteration, the edge that is being "pivoted around" is highlighted in yellow, as is the third vertex of the "pivoting" triangle.
 // - If a new face is generated this iteration, its other two edges are highlighted in green.
-// - If an existing face would be generated again, the two edges are highlighted in red and no face is generated.
 static void giftwrap(vector<Point>& p, vector<Tri>& t) {
     t.clear();;
     lines->clear();
@@ -631,11 +625,11 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
                     to_process.push(pair<Line,Point>(bc, hull_tri.a));
                     to_process.push(pair<Line,Point>(ca, hull_tri.b));
                 }
-                else {
-                    //Triangle already exists, just don't add it to the vector.
-                    lines->at(1).col = Color(1,0,0,1);
-                    lines->at(2).col = Color(1,0,0,1);
-                }
+                // else {
+                //     //Triangle already exists, just don't add it to the vector.
+                //     lines->at(1).col = Color(1,0,0,1);
+                //     lines->at(2).col = Color(1,0,0,1);
+                // }
 
             }
             pauseForDisplay();
@@ -797,6 +791,7 @@ int main(int argc, char *argv[])
                 << "In-program commands:\n"
                 << "\tw/a/s/d\t\t\t\t\tRotate up/left/down/right\n"
                 << "\tb\t\t\t\t\tSwitch the background color between black and white\n"
+                << "\tg\t\t\t\t\tPerform 3D Giftwrapping\n"
                 << "\tq\t\t\t\t\tPerform 3D QuickHull\n"
                 << "\tr\t\t\t\t\tReset all lines/faces (leaving only the pointset)\n"
                 << "\t[ESC]\t\t\t\t\tExit the program\n";
