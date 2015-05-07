@@ -193,12 +193,14 @@ static void renderLines(const vector<Line>& lines) {
 
 static void renderPoints(const vector<Point>& points) {
     glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
     glBegin(GL_POINTS);
     for (size_t i = 0; i < points.size(); ++i) {
         glColor4f(points[i].col.r, points[i].col.g, points[i].col.b, points[i].col.a);
         glVertex3f(points[i].x,points[i].y,points[i].z);
     }
     glEnd();
+    glEnable(GL_DEPTH_TEST);
 }
 
 static void display(void)
@@ -312,6 +314,7 @@ static Point normalize(const Point& original) {
 }
 
 //Projects a point onto a plane that passes through the origin defined by the given orthagonal vector
+//Adapted from http://stackoverflow.com/a/8944143
 static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPlane) {
     Point planeNormal = normalize(vectorOrthoToPlane);
     float p = dotProd(toProject,planeNormal);
@@ -510,6 +513,13 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
     }
 }
 
+// 3D Gift Wrapping Algorithm
+// Based on http://www.cs.jhu.edu/~misha/Spring14/Preparata77.pdf
+// Visualization:
+// - The algorithm generates an initial face of the convex hull and outlines it in blue.
+// - At every iteration, the edge that is being "pivoted around" is highlighted in yellow, as is the third vertex of the "pivoting" triangle.
+// - If a new face is generated this iteration, its other two edges are highlighted in green.
+// - If an existing face would be generated again, the two edges are highlighted in red and no face is generated.
 static void giftwrap(vector<Point>& p, vector<Tri>& t) {
     t.clear();;
     lines->clear();
@@ -534,35 +544,48 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
     }
 
     Tri f(*p1, *p2, *p3);
-    f.col = Color(1,1,0,.5);
     t.push_back(f);
 
+    //Highlight the triangle's edges
+    lines->push_back(Line(*p1,*p2, Color(0,0,1,1)));
+    lines->push_back(Line(*p1,*p3, Color(0,0,1,1)));
+    lines->push_back(Line(*p2,*p3, Color(0,0,1,1)));
+
     pauseForDisplay();
+
+    points->push_back(Point(0,0,0,-1,Color(1,1,0,1)));
+
+    lines->at(0).col = Color(1,1,0,1);
 
     queue<pair<Line, Point> > to_process;
     set<Line> processed;
     set<Tri> generated;
+
+    //Add each of its edges, paired with its remaining points to the queue
     to_process.push(pair<Line, Point>(Line(*p1, *p2),*p3));
     to_process.push(pair<Line, Point>(Line(*p2, *p3),*p1));
     to_process.push(pair<Line, Point>(Line(*p1, *p3),*p2));
 
-    lines->push_back(Line(Point(),Point(), Color(1,1,0,1)));
-    lines->push_back(Line(Point(),Point(), Color(1,0,0,1)));
-    lines->push_back(Line(Point(),Point(), Color(1,0,0,1)));
-
+    //Loop until out of edge-point pairs
     while (!to_process.empty()) {
         pair<Line, Point> c = to_process.front();
         to_process.pop();
+
+        //Check to ensure we haven't already tried to generate a triangle with this edge
         if (processed.find(c.first) == processed.end()) {
             processed.insert(c.first);
 
+            //Display highlighting stuff
             lines->at(0).a = c.first.a;
             lines->at(0).b = c.first.b;
-            //cout << "Processing point " << c.second.x << " " << c.second.y << " " << c.second.z <<  " across axis "
-            //    << c.first.a.x << " " << c.first.a.y << " " << c.first.a.z << " "
-            //    << c.first.b.x << " " << c.first.b.y << " " << c.first.b.z <<  endl;
+            points->at(points->size() - 1).x = c.second.x;
+            points->at(points->size() - 1).y = c.second.y;
+            points->at(points->size() - 1).z = c.second.z;
 
+            //To find the next point, we must first find the edge's vector
             Point plane_vec = Point(c.first.a.x - c.first.b.x, c.first.a.y - c.first.b.y, c.first.a.z - c.first.b.z);
+            //We define a plane for which that vector is orthogonal to it, so that we can project other points onto
+            //that plane and reason about their angles as though they were 2d points.
             Point origin = projectToPlane(c.first.a, plane_vec); //origin on plane to find angle around
             Point proj1 = projectToPlane(c.second, plane_vec);   //projected version of currently processing point
             Point vec1 = normalize(Point(proj1.x - origin.x, proj1.y - origin.y, 0)); //vector between origin and projected point
@@ -570,6 +593,8 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
             float max_angle = 0;
             Point* best_point = NULL;
 
+            //We then search all points (besides those in the edge-point pair) to find the point with the maximal angle
+            //between itself and the point in the edge-point pair around the axis defined by the edge.
             for (vector<Point>::iterator it = p.begin(); it != p.end(); ++it) {
                 if (*it != c.first.a && *it != c.first.b && *it != c.second) {
                     Point proj2 = projectToPlane(*it, plane_vec); //projected version of point to check angle
@@ -583,9 +608,8 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
             }
 
             if (best_point != NULL) {
-                t[t.size() - 1].col = randomColor();
+                //Generate a triangle using the maximum-angle point and the edge
                 Tri hull_tri(c.first.a, c.first.b, *best_point);
-                hull_tri.col = Color(1,1,0,.5);
 
                 lines->at(1).a = hull_tri.b;
                 lines->at(1).b = hull_tri.c;
@@ -593,27 +617,22 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
                 lines->at(2).a = hull_tri.c;
                 lines->at(2).b = hull_tri.a;
 
+                //Check to ensure this triangle doesn't already exist
                 if (generated.find(hull_tri) == generated.end()) {
+                    //Add it to the vector of triangles
                     t.push_back(hull_tri);
                     generated.insert(hull_tri);
 
                     lines->at(1).col = Color(0,1,0,1);
                     lines->at(2).col = Color(0,1,0,1);
 
+                    //Queue its two edges with the appropriate points (we can skip one edge, as we used that to generate this triangle)
                     Line bc(hull_tri.b, hull_tri.c), ca(hull_tri.c, hull_tri.a);
                     to_process.push(pair<Line,Point>(bc, hull_tri.a));
-                    //cout << "Queuing point " << hull_tri.a.x << " " << hull_tri.a.y << " " << hull_tri.a.z <<  " across axis "
-                    //        << bc.a.x << " " << bc.a.y << " " << bc.a.z << " "
-                    //        << bc.b.x << " " << bc.b.y << " " << bc.b.z <<  endl;
-
                     to_process.push(pair<Line,Point>(ca, hull_tri.b));
-
-                    //cout << "Queuing point " << hull_tri.b.x << " " << hull_tri.b.y << " " << hull_tri.b.z <<  " across axis "
-                    //        << ca.a.x << " " << ca.a.y << " " << ca.a.z << " "
-                    //        << ca.b.x << " " << ca.b.y << " " << ca.b.z <<  endl;
-
                 }
                 else {
+                    //Triangle already exists, just don't add it to the vector.
                     lines->at(1).col = Color(1,0,0,1);
                     lines->at(2).col = Color(1,0,0,1);
                 }
@@ -623,8 +642,8 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
         }
     }
 
-    t[t.size() - 1].col = randomColor();
     lines->clear();
+    points->pop_back();
 }
 
 static void resize(int width, int height)
@@ -640,7 +659,7 @@ static void resize(int width, int height)
     glLoadIdentity() ;
 }
 
-
+//Determines scale of rendered scene to fit everything onscreen
 static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
     double furthest = 0;
 
