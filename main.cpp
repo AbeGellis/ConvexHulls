@@ -150,6 +150,107 @@ bool operator<(const Tri& lhs, const Tri& rhs) {
 
 /* END STRUCTS */
 
+/* ---------------------------------------------------------------------------------------------*/
+
+/* BEGIN GEOMETRIC UTILITY FUNCTIONS */
+
+static float dotProd(const Point& t1, const Point& t2) {
+    return t1.x * t2.x + t1.y * t2.y + t1.z * t2.z;
+}
+
+static Point crossProd(const Point& t1, const Point& t2) {
+    return Point(t1.y * t2.z - t1.z * t2.y, t1.z * t2.x - t1.x * t2.z, t1.x * t2.y - t1.y * t2.x);
+}
+
+// Determines if three points are collinear
+// Equation (5) of http://mathworld.wolfram.com/Collinear.html
+static bool collinear(const Point& a, const Point& b, const Point& c) {
+    Point t1(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
+    Point t2(a.x - c.x, a.y - c.y, a.z - c.z); // a - c
+
+    // t1 x t2
+    Point t3 = crossProd(t1, t2);
+
+    return (0 == dotProd(t3, t3));
+}
+
+// Determines if four points are coplanar
+// From http://mathworld.wolfram.com/Coplanar.html
+static bool coplanar(const Point& a, const Point& b, const Point& c, const Point& d) {
+    Point t1(c.x - a.x, c.y - a.y, c.z - a.z); // c - a
+    Point t2(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
+    Point t3(d.x - c.x, d.y - c.y, d.z - c.z); // d - c
+
+    // coplanar if 0 == (t1 . (t2 x t3))
+    return (0 == dotProd(t1, crossProd(t2, t3)));
+}
+
+static bool nondegenerate(const vector<Point>& p) {
+    for ( int i = 0; i < p.size(); ++i ) {
+        for ( int j = i + 1; j < p.size(); ++j ) {
+            for ( int k = j + 1; k < p.size(); ++k ) {
+                if ( collinear(p[i], p[j], p[k]) ) {
+                    cerr << "3 Collinear points detected!\n";
+                    return false;
+                }
+                for ( int l = k + 1; l < p.size(); ++l ) {
+                    if ( coplanar(p[i], p[j], p[k], p[l]) ) {
+                        cerr << "4 Coplanar points detected!\n";
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+// From O'Rourke, Computational Geometry in C, Code 4.16
+// if a point is "outside" then vSign == -1
+static int vSign( const Tri& t, const Point& p ) {
+    Point t1(t.a.x - p.x, t.a.y - p.y, t.a.z - p.z);
+    Point t2(t.b.x - p.x, t.b.y - p.y, t.b.z - p.z);
+    Point t3(t.c.x - p.x, t.c.y - p.y, t.c.z - p.z);
+
+    // vSign = sign(t1 . (t2 x t3))
+    float vol = dotProd(t1, crossProd(t2, t3));
+    return vol > 0 ? 1 : vol < 0 ? -1 : 0;
+}
+
+// Distance from point to the plane described by a triangle
+// Equation (12,13) of http://mathworld.wolfram.com/Point-PlaneDistance.html
+static float distPointToTri( const Point& p, const Tri& t ) {
+    Point t1(t.b.x - t.a.x, t.b.y - t.a.y, t.b.z - t.a.z); // b - a
+    Point t2(t.c.x - t.a.x, t.c.y - t.a.y, t.c.z - t.a.z); // c - a
+
+    Point n = crossProd(t1, t2);
+    float nSize = sqrtf(dotProd(n, n));
+    Point nhat(n.x / nSize, n.y / nSize, n.z / nSize);
+
+    Point t3(p.x - t.a.x, p.y - t.a.y, p.z - t.a.y); // p - a
+    return (dotProd(nhat, t3));
+}
+
+// Normalizes a vector to unit length
+static Point normalize(const Point& original) {
+    float magnitude = sqrtf(dotProd(original, original));
+    if (magnitude == 0)
+        return original;
+    else
+        return Point(original.x / magnitude, original.y / magnitude, original.z / magnitude);
+}
+
+//Projects a point onto a plane that passes through the origin defined by the given orthagonal vector
+//Adapted from http://stackoverflow.com/a/8944143
+static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPlane) {
+    Point planeNormal = normalize(vectorOrthoToPlane);
+    float p = dotProd(toProject,planeNormal);
+    return Point(toProject.x - (planeNormal.x * p), toProject.y - (planeNormal.y * p), toProject.z - (planeNormal.z * p));
+}
+
+
+/* END GEOMETRIC UTILITY FUNCTIONS */
+
 /* ----------------------------------------------------------------------------------------me ch-----*/
 
 /* BEGIN VISUALIZATION VARIABLES / METHODS */
@@ -312,107 +413,6 @@ const GLfloat high_shininess[] = { 75.0f };
 
 
 /* END VISUALIZATION VARIABLES / METHODS */
-
-/* ---------------------------------------------------------------------------------------------*/
-
-/* BEGIN GEOMETRIC UTILITY FUNCTIONS */
-
-static float dotProd(const Point& t1, const Point& t2) {
-    return t1.x * t2.x + t1.y * t2.y + t1.z * t2.z;
-}
-
-static Point crossProd(const Point& t1, const Point& t2) {
-    return Point(t1.y * t2.z - t1.z * t2.y, t1.z * t2.x - t1.x * t2.z, t1.x * t2.y - t1.y * t2.x);
-}
-
-// Determines if three points are collinear
-// Equation (5) of http://mathworld.wolfram.com/Collinear.html
-static bool collinear(const Point& a, const Point& b, const Point& c) {
-    Point t1(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
-    Point t2(a.x - c.x, a.y - c.y, a.z - c.z); // a - c
-
-    // t1 x t2
-    Point t3 = crossProd(t1, t2);
-
-    return (0 == dotProd(t3, t3));
-}
-
-// Determines if four points are coplanar
-// From http://mathworld.wolfram.com/Coplanar.html
-static bool coplanar(const Point& a, const Point& b, const Point& c, const Point& d) {
-    Point t1(c.x - a.x, c.y - a.y, c.z - a.z); // c - a
-    Point t2(b.x - a.x, b.y - a.y, b.z - a.z); // b - a
-    Point t3(d.x - c.x, d.y - c.y, d.z - c.z); // d - c
-
-    // coplanar if 0 == (t1 . (t2 x t3))
-    return (0 == dotProd(t1, crossProd(t2, t3)));
-}
-
-static bool nondegenerate(const vector<Point>& p) {
-    for ( int i = 0; i < p.size(); ++i ) {
-        for ( int j = i + 1; j < p.size(); ++j ) {
-            for ( int k = j + 1; k < p.size(); ++k ) {
-                if ( collinear(p[i], p[j], p[k]) ) {
-                    cerr << "3 Collinear points detected!\n";
-                    return false;
-                }
-                for ( int l = k + 1; l < p.size(); ++l ) {
-                    if ( coplanar(p[i], p[j], p[k], p[l]) ) {
-                        cerr << "4 Coplanar points detected!\n";
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-    return true;
-}
-
-// From O'Rourke, Computational Geometry in C, Code 4.16
-// if a point is "outside" then vSign == -1
-static int vSign( const Tri& t, const Point& p ) {
-    Point t1(t.a.x - p.x, t.a.y - p.y, t.a.z - p.z);
-    Point t2(t.b.x - p.x, t.b.y - p.y, t.b.z - p.z);
-    Point t3(t.c.x - p.x, t.c.y - p.y, t.c.z - p.z);
-
-    // vSign = sign(t1 . (t2 x t3))
-    float vol = dotProd(t1, crossProd(t2, t3));
-    return vol > 0 ? 1 : vol < 0 ? -1 : 0;
-}
-
-// Distance from point to the plane described by a triangle
-// Equation (12,13) of http://mathworld.wolfram.com/Point-PlaneDistance.html
-static float distPointToTri( const Point& p, const Tri& t ) {
-    Point t1(t.b.x - t.a.x, t.b.y - t.a.y, t.b.z - t.a.z); // b - a
-    Point t2(t.c.x - t.a.x, t.c.y - t.a.y, t.c.z - t.a.z); // c - a
-
-    Point n = crossProd(t1, t2);
-    float nSize = sqrtf(dotProd(n, n));
-    Point nhat(n.x / nSize, n.y / nSize, n.z / nSize);
-
-    Point t3(p.x - t.a.x, p.y - t.a.y, p.z - t.a.y); // p - a
-    return (dotProd(nhat, t3));
-}
-
-// Normalizes a vector to unit length
-static Point normalize(const Point& original) {
-    float magnitude = sqrtf(dotProd(original, original));
-    if (magnitude == 0)
-        return original;
-    else
-        return Point(original.x / magnitude, original.y / magnitude, original.z / magnitude);
-}
-
-//Projects a point onto a plane that passes through the origin defined by the given orthagonal vector
-//Adapted from http://stackoverflow.com/a/8944143
-static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPlane) {
-    Point planeNormal = normalize(vectorOrthoToPlane);
-    float p = dotProd(toProject,planeNormal);
-    return Point(toProject.x - (planeNormal.x * p), toProject.y - (planeNormal.y * p), toProject.z - (planeNormal.z * p));
-}
-
-
-/* END GEOMETRIC UTILITY FUNCTIONS */
 
 /* ---------------------------------------------------------------------------------------------*/
 
