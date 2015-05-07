@@ -24,6 +24,7 @@
 #include <queue>
 #include <iostream>
 #include <fstream>
+#include <algorithm>    //Used for one convenience sort for Tri points
 
 #include <cmath>
 #include <unistd.h>
@@ -53,6 +54,18 @@ bool operator==(const Point& lhs, const Point& rhs) {
 bool operator!=(const Point& lhs, const Point& rhs) {
     return !(lhs == rhs);
 }
+//For use in constructing a line set in Giftwrapping
+bool operator<(const Point& lhs, const Point& rhs) {
+    if (lhs.x == rhs.x) {
+        if (lhs.y == rhs.y) {
+            if (lhs.z == rhs.z)
+                return false;
+            else return (lhs.z < rhs.z);
+        }
+        else return (lhs.y < rhs.y);
+    }
+    else return (lhs.x < rhs.x);
+}
 
 struct Line {
     Point a, b;
@@ -60,6 +73,14 @@ struct Line {
 
     Line(Point a, Point b, Color c = Color(1,0,0,.5)) : a(a), b(b), col(c) {}
 };
+//For use in constructing a line set in Giftwrapping
+//Ignores order of vertices when comparing
+bool operator<(const Line& lhs, const Line& rhs) {
+    if (max(lhs.a,lhs.b) == max(rhs.a, rhs.b))
+        return min(lhs.a,lhs.b) < min(rhs.a, rhs.b);
+    else return max(lhs.a,lhs.b) < max(rhs.a, rhs.b);
+}
+
 bool operator==(const Line& lhs, const Line& rhs) {
     return (lhs.a == rhs.a && lhs.b == rhs.b);
 }
@@ -110,6 +131,22 @@ bool operator==(const Tri& lhs, const Tri& rhs) {
 bool operator!=(const Tri& lhs, const Tri& rhs) {
     return !(lhs == rhs);
 }
+//For use in constructing a Tri set in Giftwrapping
+//Ignores order of vertices when comparing
+bool operator<(const Tri& lhs, const Tri& rhs) {
+    Point leftpoints[] = {lhs.a, lhs.b, lhs.c}, rightpoints[] = {rhs.a, rhs.b, rhs.c};
+    sort(leftpoints, leftpoints + 3);
+    sort(rightpoints, rightpoints + 3);
+    if (leftpoints[2] == rightpoints[2]) {
+        if (leftpoints[1] == rightpoints[1]) {
+            return leftpoints[0] < rightpoints[0];
+        }
+        else return leftpoints[1] < rightpoints[1];
+    }
+    else return leftpoints[2] < rightpoints[2];
+}
+
+
 
 static vector<Tri>* faces;
 static vector<Line>* lines;
@@ -265,6 +302,21 @@ static float distPointToTri( const Point& p, const Tri& t ) {
     return (dotProd(nhat, t3));
 }
 
+// Normalizes a vector to unit length
+static Point normalize(const Point& original) {
+    float magnitude = sqrtf((original.x * original.x) + (original.y * original.y) + (original.z * original.z));
+    if (magnitude == 0)
+        return original;
+    else
+        return Point(original.x / magnitude, original.y / magnitude, original.z / magnitude);
+}
+
+//Projects a point onto a plane that passes through the origin defined by the given orthagonal vector
+static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPlane) {
+    Point planeNormal = normalize(vectorOrthoToPlane);
+    float p = dotProd(toProject,planeNormal);
+    return Point(toProject.x - (planeNormal.x * p), toProject.y - (planeNormal.y * p), toProject.z - (planeNormal.z * p));
+}
 
 static void sleep(int millis) {
 #ifdef _WIN32
@@ -380,7 +432,7 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                 (*it)->col = tc;
             pauseForDisplay();
         }
-        
+
         // the boundary of V is the set of horizon ridges H
         // for each ridge R in H
         for ( int i = 0; i < visible.size(); ++i ) {
@@ -428,7 +480,7 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                         }
                     }
                 }
-                
+
                 // For each unassigned point q in an outside set of a facet of V
                 for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
                     if ( !(*it)->vis ) // Ignore invisible facets
@@ -456,6 +508,123 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
         points->at(argmax_real_index).col = Color(1,0,0,1);
         pauseForDisplay();
     }
+}
+
+static void giftwrap(vector<Point>& p, vector<Tri>& t) {
+    t.clear();;
+    lines->clear();
+    pauseForDisplay();
+
+    //Find the first triangle on the hull (the highest 3 points on the y-axis)
+    Point *p1 = &p[0], *p2 = &p[1], *p3 = &p[2];
+    for (vector<Point>::iterator it = p.begin(); it != p.end(); ++it) {
+        if (it->y > p3->y) {
+            if (it->y > p2->y) {
+                p3 = p2;
+                if (it->y > p1->y) {
+                    p2 = p1;
+                    p1 = &(*it);
+                }
+                else
+                    p2 = &(*it);
+            }
+            else
+                p3 = &(*it);
+        }
+    }
+
+    Tri f(*p1, *p2, *p3);
+    f.col = Color(1,1,0,.5);
+    t.push_back(f);
+
+    pauseForDisplay();
+
+    queue<pair<Line, Point> > to_process;
+    set<Line> processed;
+    set<Tri> generated;
+    to_process.push(pair<Line, Point>(Line(*p1, *p2),*p3));
+    to_process.push(pair<Line, Point>(Line(*p2, *p3),*p1));
+    to_process.push(pair<Line, Point>(Line(*p1, *p3),*p2));
+
+    lines->push_back(Line(Point(),Point(), Color(1,1,0,1)));
+    lines->push_back(Line(Point(),Point(), Color(1,0,0,1)));
+    lines->push_back(Line(Point(),Point(), Color(1,0,0,1)));
+
+    while (!to_process.empty()) {
+        pair<Line, Point> c = to_process.front();
+        to_process.pop();
+        if (processed.find(c.first) == processed.end()) {
+            processed.insert(c.first);
+
+            lines->at(0).a = c.first.a;
+            lines->at(0).b = c.first.b;
+            //cout << "Processing point " << c.second.x << " " << c.second.y << " " << c.second.z <<  " across axis "
+            //    << c.first.a.x << " " << c.first.a.y << " " << c.first.a.z << " "
+            //    << c.first.b.x << " " << c.first.b.y << " " << c.first.b.z <<  endl;
+
+            Point plane_vec = Point(c.first.a.x - c.first.b.x, c.first.a.y - c.first.b.y, c.first.a.z - c.first.b.z);
+            Point origin = projectToPlane(c.first.a, plane_vec); //origin on plane to find angle around
+            Point proj1 = projectToPlane(c.second, plane_vec);   //projected version of currently processing point
+            Point vec1 = normalize(Point(proj1.x - origin.x, proj1.y - origin.y, 0)); //vector between origin and projected point
+
+            float max_angle = 0;
+            Point* best_point = NULL;
+
+            for (vector<Point>::iterator it = p.begin(); it != p.end(); ++it) {
+                if (*it != c.first.a && *it != c.first.b && *it != c.second) {
+                    Point proj2 = projectToPlane(*it, plane_vec); //projected version of point to check angle
+                    Point vec2 = normalize(Point(proj2.x - origin.x, proj2.y - origin.y, 0)); //vector between origin and projected point
+                    float angle = acosf(dotProd(vec1, vec2));
+                    if (angle > max_angle) {
+                        max_angle = angle;
+                        best_point = &(*it);
+                    }
+                }
+            }
+
+            if (best_point != NULL) {
+                t[t.size() - 1].col = randomColor();
+                Tri hull_tri(c.first.a, c.first.b, *best_point);
+                hull_tri.col = Color(1,1,0,.5);
+
+                lines->at(1).a = hull_tri.b;
+                lines->at(1).b = hull_tri.c;
+
+                lines->at(2).a = hull_tri.c;
+                lines->at(2).b = hull_tri.a;
+
+                if (generated.find(hull_tri) == generated.end()) {
+                    t.push_back(hull_tri);
+                    generated.insert(hull_tri);
+
+                    lines->at(1).col = Color(0,1,0,1);
+                    lines->at(2).col = Color(0,1,0,1);
+
+                    Line bc(hull_tri.b, hull_tri.c), ca(hull_tri.c, hull_tri.a);
+                    to_process.push(pair<Line,Point>(bc, hull_tri.a));
+                    //cout << "Queuing point " << hull_tri.a.x << " " << hull_tri.a.y << " " << hull_tri.a.z <<  " across axis "
+                    //        << bc.a.x << " " << bc.a.y << " " << bc.a.z << " "
+                    //        << bc.b.x << " " << bc.b.y << " " << bc.b.z <<  endl;
+
+                    to_process.push(pair<Line,Point>(ca, hull_tri.b));
+
+                    //cout << "Queuing point " << hull_tri.b.x << " " << hull_tri.b.y << " " << hull_tri.b.z <<  " across axis "
+                    //        << ca.a.x << " " << ca.a.y << " " << ca.a.z << " "
+                    //        << ca.b.x << " " << ca.b.y << " " << ca.b.z <<  endl;
+
+                }
+                else {
+                    lines->at(1).col = Color(1,0,0,1);
+                    lines->at(2).col = Color(1,0,0,1);
+                }
+
+            }
+            pauseForDisplay();
+        }
+    }
+
+    t[t.size() - 1].col = randomColor();
+    lines->clear();
 }
 
 static void resize(int width, int height)
@@ -517,6 +686,9 @@ static void key(unsigned char key, int x, int y)
             break;
         case 'q':
             quickhull(*points, *faces);
+            break;
+        case 'g':
+            giftwrap(*points, *faces);
             break;
         case 'b':
             bg ^= 1;
@@ -659,10 +831,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-
-
     vector<Tri> t;
-    t.reserve(N * N * N); // 
+    t.reserve(N * N * N); //
 
     vector<Line> l;
 
