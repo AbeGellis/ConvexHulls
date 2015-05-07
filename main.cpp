@@ -150,7 +150,7 @@ bool operator<(const Tri& lhs, const Tri& rhs) {
 
 /* END STRUCTS */
 
-/* ---------------------------------------------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------------me ch-----*/
 
 /* BEGIN VISUALIZATION VARIABLES / METHODS */
 
@@ -159,7 +159,7 @@ static vector<Line>* lines;
 static vector<Point>* points;
 static double scale = 1;
 static int bg = 0;
-const double DISPLAY_SIZE = .6;
+const double DISPLAY_SIZE = 2.5;
 static bool facesOn = true;
 static double rotSpeed = 10;
 static double POINT_SIZE = 2;
@@ -261,40 +261,6 @@ static void resize(int width, int height)
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity() ;
-}
-
-//Determines scale of rendered scene to fit everything onscreen
-static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
-    double furthest = 0;
-
-    for (size_t i = 0; i < tris.size(); ++i) {
-        if (tris[i].a.x > furthest) furthest = tris[i].a.x;
-        if (tris[i].a.y > furthest) furthest = tris[i].a.y;
-        if (tris[i].a.z > furthest) furthest = tris[i].a.z;
-        if (tris[i].b.x > furthest) furthest = tris[i].b.x;
-        if (tris[i].b.y > furthest) furthest = tris[i].b.y;
-        if (tris[i].b.z > furthest) furthest = tris[i].b.z;
-        if (tris[i].c.x > furthest) furthest = tris[i].c.x;
-        if (tris[i].c.y > furthest) furthest = tris[i].c.y;
-        if (tris[i].c.z > furthest) furthest = tris[i].c.z;
-    }
-
-    for (size_t i = 0; i < lines.size(); ++i) {
-        if (lines[i].a.x > furthest) furthest = lines[i].a.x;
-        if (lines[i].a.y > furthest) furthest = lines[i].a.y;
-        if (lines[i].a.z > furthest) furthest = lines[i].a.z;
-        if (lines[i].b.x > furthest) furthest = lines[i].b.x;
-        if (lines[i].b.y > furthest) furthest = lines[i].b.y;
-        if (lines[i].b.z > furthest) furthest = lines[i].b.z;
-    }
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        if (points[i].x > furthest) furthest = points[i].x;
-        if (points[i].y > furthest) furthest = points[i].y;
-        if (points[i].z > furthest) furthest = points[i].z;
-    }
-
-    scale = DISPLAY_SIZE / furthest;
 }
 
 static void idle(void)
@@ -412,6 +378,39 @@ static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPl
     float p = dotProd(toProject,planeNormal);
     return Point(toProject.x - (planeNormal.x * p), toProject.y - (planeNormal.y * p), toProject.z - (planeNormal.z * p));
 }
+
+//Determines scale of rendered scene to fit everything onscreen
+static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
+    double furthest = 0;
+    double sqrdist;
+
+    for (size_t i = 0; i < tris.size(); ++i) {
+        sqrdist = dotProd(tris[i].a,tris[i].a);
+        if (sqrdist > furthest) furthest = sqrdist;
+
+        sqrdist = dotProd(tris[i].b,tris[i].b);
+        if (sqrdist > furthest) furthest = sqrdist;
+
+        sqrdist = dotProd(tris[i].c,tris[i].c);
+        if (sqrdist > furthest) furthest = sqrdist;
+    }
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+        sqrdist = dotProd(lines[i].a,lines[i].a);
+        if (sqrdist > furthest) furthest = sqrdist;
+
+        sqrdist = dotProd(lines[i].b,lines[i].b);
+        if (sqrdist > furthest) furthest = sqrdist;
+    }
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        sqrdist = dotProd(points[i],points[i]);
+        if (sqrdist > furthest) furthest = sqrdist;
+    }
+
+    scale = DISPLAY_SIZE / sqrt(furthest);
+}
+
 
 /* END GEOMETRIC UTILITY FUNCTIONS */
 
@@ -910,7 +909,7 @@ int main(int argc, char *argv[])
             pmax.z = it->z;
     }
 
-    Point pavg((pmax.x - pmin.x)/2, (pmax.y - pmin.y)/2, (pmax.z - pmin.z)/2);
+    Point pavg((pmax.x + pmin.x)/2, (pmax.y + pmin.y)/2, (pmax.z + pmin.z)/2);
 
     for (vector<Point>::iterator it = p.begin(); it != p.end(); ++it) {
         it->x -= pavg.x;
