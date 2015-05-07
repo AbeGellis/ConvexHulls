@@ -526,9 +526,9 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
                 // l is a boundary edge if it borders exactly one visible face
                 /**/bool ridge = true;
                 /**/for ( int k = 0; ridge && k < visible.size(); ++k ) {
-                /**/    vector<Line> halfEdges = visible[k]->getReverseHalfEdges();
-                /**/    for ( int m = 0; m < halfEdges.size(); ++m ) {
-                /**/        if ( halfEdges[m] == l ) {
+                /**/    vector<Line> halfEdges2 = visible[k]->getReverseHalfEdges();
+                /**/    for ( int m = 0; m < halfEdges2.size(); ++m ) {
+                /**/        if ( halfEdges2[m] == l ) {
                 /**/            ridge = false;
                 /**/            break;
                 /**/        }
@@ -600,7 +600,7 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
 // - At every iteration, the edge that is being "pivoted around" is highlighted in yellow, as is the third vertex of the "pivoting" triangle.
 // - If a new face is generated this iteration, its other two edges are highlighted in green.
 static void giftwrap(vector<Point>& p, vector<Tri>& t) {
-    t.clear();;
+    t.clear();
     lines->clear();
     pauseForDisplay();
 
