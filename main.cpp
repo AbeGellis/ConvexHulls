@@ -159,6 +159,12 @@ static double xRot = 0, yRot = 0;
 static double rotSpeed = 10;
 static double POINT_SIZE = 2;
 static int SLEEP_TIME = 500;
+static double DEG_TO_RAD = 3.141592653589793 / 180.0;
+static float rotMat[] = { 1, 0, 0, 0,
+                          0, 1, 0, 0,
+                          0, 0, 1, 0,
+                          0, 0, 0, 1 };
+
 /* GLUT callback Handlers */
 
 static void renderFaces(const vector<Tri>& tris) {
@@ -209,17 +215,16 @@ static void display(void)
 
     glPushMatrix();
     glTranslated(0,0,-6);
-    glRotated(xRot,0,1,0);
-    glRotated(yRot,1,0,0);
+    //glRotated(xRot,0,1,0);
+    //glRotated(yRot,1,0,0);
+    glMultMatrixf(rotMat);
     glScaled(scale, scale, scale);
 
     renderLines(*lines);
 
     renderPoints(*points);
 
-
     renderFaces(*faces);
-
 
     glPopMatrix();
 
@@ -509,7 +514,7 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
 }
 
 // 3D Gift Wrapping Algorithm
-// Based on http://www.cs.jhu.edu/~misha/Spring14/Preparata77.pdf
+// Based on Pg 109 of O’Rourke Computational Geometry in C
 // Visualization:
 // - The algorithm generates an initial face of the convex hull and outlines it in blue.
 // - At every iteration, the edge that is being "pivoted around" is highlighted in yellow, as is the third vertex of the "pivoting" triangle.
@@ -710,16 +715,33 @@ static void key(unsigned char key, int x, int y)
             }
             break;
         case 'a':
-            xRot -= rotSpeed;
+            //xRot -= rotSpeed;
+            glPushMatrix();
+            glRotatef(-rotSpeed, 0, 1, 0);
+            glMultMatrixf(rotMat);
+            glGetFloatv (GL_MODELVIEW_MATRIX, rotMat);
+            glPopMatrix();
             break;
         case 'd':
-            xRot += rotSpeed;
+            glPushMatrix();
+            glRotatef(rotSpeed, 0, 1, 0);
+            glMultMatrixf(rotMat);
+            glGetFloatv (GL_MODELVIEW_MATRIX, rotMat);
+            glPopMatrix();
             break;
         case 'w':
-            yRot -= rotSpeed;
+            glPushMatrix();
+            glRotatef(-rotSpeed, 1, 0, 0);
+            glMultMatrixf(rotMat);
+            glGetFloatv (GL_MODELVIEW_MATRIX, rotMat);
+            glPopMatrix();
             break;
         case 's':
-            yRot += rotSpeed;
+            glPushMatrix();
+            glRotatef(rotSpeed, 1, 0, 0);
+            glMultMatrixf(rotMat);
+            glGetFloatv (GL_MODELVIEW_MATRIX, rotMat);
+            glPopMatrix();
             break;
     }
 
