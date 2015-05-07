@@ -624,15 +624,10 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
                     Line bc(hull_tri.b, hull_tri.c), ca(hull_tri.c, hull_tri.a);
                     to_process.push(pair<Line,Point>(bc, hull_tri.a));
                     to_process.push(pair<Line,Point>(ca, hull_tri.b));
-                }
-                // else {
-                //     //Triangle already exists, just don't add it to the vector.
-                //     lines->at(1).col = Color(1,0,0,1);
-                //     lines->at(2).col = Color(1,0,0,1);
-                // }
 
+                    pauseForDisplay();
+                }
             }
-            pauseForDisplay();
         }
     }
 
