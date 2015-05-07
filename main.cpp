@@ -31,6 +31,8 @@
 
 using namespace std;
 
+/* BEGIN STRUCTS */
+
 struct Color {
     float r,g,b,a;
     Color(float r = 0, float g = 0, float b = 0, float a = 0) : r(r), g(g), b(b), a(a) {}
@@ -71,7 +73,7 @@ struct Line {
     Point a, b;
     Color col;
 
-    Line(Point a, Point b, Color c = Color(1,0,0,.5)) : a(a), b(b), col(c) {}
+    Line(Point a, Point b, Color c = Color(1,1,0,.5)) : a(a), b(b), col(c) {}
 };
 //For use in constructing a line set in Giftwrapping
 //Ignores order of vertices when comparing
@@ -146,7 +148,11 @@ bool operator<(const Tri& lhs, const Tri& rhs) {
     else return leftpoints[2] < rightpoints[2];
 }
 
+/* END STRUCTS */
 
+/* ---------------------------------------------------------------------------------------------*/
+
+/* BEGIN VISUALIZATION VARIABLES / METHODS */
 
 static vector<Tri>* faces;
 static vector<Line>* lines;
@@ -164,6 +170,7 @@ static float rotMat[] = { 1, 0, 0, 0,
                           0, 0, 1, 0,
                           0, 0, 0, 1 };
 
+static bool opaque = false;
 /* GLUT callback Handlers */
 
 static void renderFaces(const vector<Tri>& tris) {
@@ -172,7 +179,7 @@ static void renderFaces(const vector<Tri>& tris) {
     for (size_t i = 0; i < tris.size(); ++i) {
         if ( tris[i].del ) // Ignore deleted facets
             continue;
-        glColor4f(tris[i].col.r, tris[i].col.g, tris[i].col.b, tris[i].col.a);
+        glColor4f(tris[i].col.r, tris[i].col.g, tris[i].col.b, opaque ? 1 : tris[i].col.a);
         glNormal3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
         glVertex3f(tris[i].a.x,tris[i].a.y,tris[i].a.z);
 
@@ -230,6 +237,87 @@ static void display(void)
     glutSwapBuffers();
 }
 
+static void sleep(int millis) {
+#ifdef _WIN32
+    Sleep(millis);
+#else
+    this_thread::sleep_for(chrono::milliseconds(millis));
+#endif
+}
+
+static void pauseForDisplay() {
+    display();
+    sleep(SLEEP_TIME);
+}
+
+static void resize(int width, int height)
+{
+    const float ar = (float) width / (float) height;
+
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glFrustum(-ar, ar, -1.0, 1.0, 2.0, 100.0);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity() ;
+}
+
+//Determines scale of rendered scene to fit everything onscreen
+static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
+    double furthest = 0;
+
+    for (size_t i = 0; i < tris.size(); ++i) {
+        if (tris[i].a.x > furthest) furthest = tris[i].a.x;
+        if (tris[i].a.y > furthest) furthest = tris[i].a.y;
+        if (tris[i].a.z > furthest) furthest = tris[i].a.z;
+        if (tris[i].b.x > furthest) furthest = tris[i].b.x;
+        if (tris[i].b.y > furthest) furthest = tris[i].b.y;
+        if (tris[i].b.z > furthest) furthest = tris[i].b.z;
+        if (tris[i].c.x > furthest) furthest = tris[i].c.x;
+        if (tris[i].c.y > furthest) furthest = tris[i].c.y;
+        if (tris[i].c.z > furthest) furthest = tris[i].c.z;
+    }
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].a.x > furthest) furthest = lines[i].a.x;
+        if (lines[i].a.y > furthest) furthest = lines[i].a.y;
+        if (lines[i].a.z > furthest) furthest = lines[i].a.z;
+        if (lines[i].b.x > furthest) furthest = lines[i].b.x;
+        if (lines[i].b.y > furthest) furthest = lines[i].b.y;
+        if (lines[i].b.z > furthest) furthest = lines[i].b.z;
+    }
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        if (points[i].x > furthest) furthest = points[i].x;
+        if (points[i].y > furthest) furthest = points[i].y;
+        if (points[i].z > furthest) furthest = points[i].z;
+    }
+
+    scale = DISPLAY_SIZE / furthest;
+}
+
+static void idle(void)
+{
+    glutPostRedisplay();
+}
+
+const GLfloat light_ambient[]  = { 0.2f, 0.2f, 0.2f, 1.0f };
+const GLfloat light_diffuse[]  = { 1.0f, 1.0f, 1.0f, 1.0f };
+const GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+const GLfloat light_position[] = { 0.0f, 0.0f, 4.5f, 0.0f };
+
+const GLfloat mat_ambient[]    = { 0.7f, 0.7f, 0.7f, 0.5f };
+const GLfloat mat_diffuse[]    = { 0.8f, 0.8f, 0.8f, 0.5f };
+const GLfloat mat_specular[]   = { 1.0f, 1.0f, 1.0f, 0.5f };
+const GLfloat high_shininess[] = { 75.0f };
+
+
+/* END VISUALIZATION VARIABLES / METHODS */
+
+/* ---------------------------------------------------------------------------------------------*/
+
+/* BEGIN GEOMETRIC UTILITY FUNCTIONS */
 
 static float dotProd(const Point& t1, const Point& t2) {
     return t1.x * t2.x + t1.y * t2.y + t1.z * t2.z;
@@ -291,7 +379,7 @@ static int vSign( const Tri& t, const Point& p ) {
 
     // vSign = sign(t1 . (t2 x t3))
     float vol = dotProd(t1, crossProd(t2, t3));
-    return vol > 0.001 ? 1 : vol < -.001 ? -1 : 0;
+    return vol > 0 ? 1 : vol < 0 ? -1 : 0;
 }
 
 // Distance from point to the plane described by a triangle
@@ -325,18 +413,12 @@ static Point projectToPlane(const Point& toProject, const Point& vectorOrthoToPl
     return Point(toProject.x - (planeNormal.x * p), toProject.y - (planeNormal.y * p), toProject.z - (planeNormal.z * p));
 }
 
-static void sleep(int millis) {
-#ifdef _WIN32
-    Sleep(millis);
-#else
-    this_thread::sleep_for(chrono::milliseconds(millis));
-#endif
-}
+/* END GEOMETRIC UTILITY FUNCTIONS */
 
-static void pauseForDisplay() {
-    display();
-    sleep(SLEEP_TIME);
-}
+/* ---------------------------------------------------------------------------------------------*/
+
+/* BEGIN 3D CONVEX HULL ALGORITHMS */
+
 
 // 3D Quickhull Algorithm
 // Based on http://www.cise.ufl.edu/~ungor/courses/fall06/papers/QuickHull.pdf
@@ -504,8 +586,8 @@ static void quickhull(vector<Point> p, vector<Tri>& t) { // Passes a COPY of the
             }
         }
         // Delete the facets in V
-        for ( set<Tri*>::iterator it = f->adjacent.begin(); it != f->adjacent.end(); ++it ) {
-            (*it)->del = (*it)->vis;
+        for ( vector<Tri*>::iterator it = visible.begin(); it != visible.end(); ++it ) {
+            (*it)->del = true;
         }
         points->at(argmax_real_index).col = Color(1,0,0,1);
         pauseForDisplay();
@@ -639,52 +721,11 @@ static void giftwrap(vector<Point>& p, vector<Tri>& t) {
     points->pop_back();
 }
 
-static void resize(int width, int height)
-{
-    const float ar = (float) width / (float) height;
+/* END 3D CONVEX HULL ALGORITHMS */
 
-    glViewport(0, 0, width, height);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glFrustum(-ar, ar, -1.0, 1.0, 2.0, 100.0);
+/* ---------------------------------------------------------------------------------------------*/
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity() ;
-}
-
-//Determines scale of rendered scene to fit everything onscreen
-static void calculateScale(const vector<Tri>& tris, const vector<Line>& lines, const vector<Point>& points) {
-    double furthest = 0;
-
-    for (size_t i = 0; i < tris.size(); ++i) {
-        if (tris[i].a.x > furthest) furthest = tris[i].a.x;
-        if (tris[i].a.y > furthest) furthest = tris[i].a.y;
-        if (tris[i].a.z > furthest) furthest = tris[i].a.z;
-        if (tris[i].b.x > furthest) furthest = tris[i].b.x;
-        if (tris[i].b.y > furthest) furthest = tris[i].b.y;
-        if (tris[i].b.z > furthest) furthest = tris[i].b.z;
-        if (tris[i].c.x > furthest) furthest = tris[i].c.x;
-        if (tris[i].c.y > furthest) furthest = tris[i].c.y;
-        if (tris[i].c.z > furthest) furthest = tris[i].c.z;
-    }
-
-    for (size_t i = 0; i < lines.size(); ++i) {
-        if (lines[i].a.x > furthest) furthest = lines[i].a.x;
-        if (lines[i].a.y > furthest) furthest = lines[i].a.y;
-        if (lines[i].a.z > furthest) furthest = lines[i].a.z;
-        if (lines[i].b.x > furthest) furthest = lines[i].b.x;
-        if (lines[i].b.y > furthest) furthest = lines[i].b.y;
-        if (lines[i].b.z > furthest) furthest = lines[i].b.z;
-    }
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        if (points[i].x > furthest) furthest = points[i].x;
-        if (points[i].y > furthest) furthest = points[i].y;
-        if (points[i].z > furthest) furthest = points[i].z;
-    }
-
-    scale = DISPLAY_SIZE / furthest;
-}
+/* BEGIN PROGRAM CONTROL */
 
 static void key(unsigned char key, int x, int y)
 {
@@ -709,6 +750,9 @@ static void key(unsigned char key, int x, int y)
             for ( int i = 0; i < points->size(); ++i ) {
                 points->at(i).col = Color(1,0,0,1);
             }
+            break;
+        case 'o' :
+            opaque = !opaque;
             break;
         case 'a':
             //xRot -= rotSpeed;
@@ -744,22 +788,11 @@ static void key(unsigned char key, int x, int y)
     glutPostRedisplay();
 }
 
-static void idle(void)
-{
-    glutPostRedisplay();
-}
+/* END PROGRAM CONTROL */
 
-const GLfloat light_ambient[]  = { 0.2f, 0.2f, 0.2f, 1.0f };
-const GLfloat light_diffuse[]  = { 1.0f, 1.0f, 1.0f, 1.0f };
-const GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-const GLfloat light_position[] = { 0.0f, 0.0f, 4.5f, 0.0f };
+/* ---------------------------------------------------------------------------------------------*/
 
-const GLfloat mat_ambient[]    = { 0.7f, 0.7f, 0.7f, 0.5f };
-const GLfloat mat_diffuse[]    = { 0.8f, 0.8f, 0.8f, 0.5f };
-const GLfloat mat_specular[]   = { 1.0f, 1.0f, 1.0f, 0.5f };
-const GLfloat high_shininess[] = { 75.0f };
-
-/* Program entry point */
+/* BEGIN PROGRAM ENTRY POINT */
 
 int main(int argc, char *argv[])
 {
@@ -804,6 +837,7 @@ int main(int argc, char *argv[])
                 << "In-program commands:\n"
                 << "\tw/a/s/d\t\t\t\t\tRotate up/left/down/right\n"
                 << "\tb\t\t\t\t\tSwitch the background color between black and white\n"
+                << "\to\t\t\t\t\tSwitch the faces between opaque and not opaque"
                 << "\tg\t\t\t\t\tPerform 3D Giftwrapping\n"
                 << "\tq\t\t\t\t\tPerform 3D QuickHull\n"
                 << "\tr\t\t\t\t\tReset all lines/faces (leaving only the pointset)\n"
@@ -934,3 +968,5 @@ int main(int argc, char *argv[])
 
     return EXIT_SUCCESS;
 }
+
+/* END PROGRAM ENTRY POINT */
