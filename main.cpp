@@ -836,7 +836,7 @@ int main(int argc, char *argv[])
                 << "In-program commands:\n"
                 << "\tw/a/s/d\t\t\t\t\tRotate up/left/down/right\n"
                 << "\tb\t\t\t\t\tSwitch the background color between black and white\n"
-                << "\to\t\t\t\t\tSwitch the faces between opaque and not opaque"
+                << "\to\t\t\t\t\tSwitch the faces between opaque and not opaque\n"
                 << "\tg\t\t\t\t\tPerform 3D Giftwrapping\n"
                 << "\tq\t\t\t\t\tPerform 3D QuickHull\n"
                 << "\tr\t\t\t\t\tReset all lines/faces (leaving only the pointset)\n"
